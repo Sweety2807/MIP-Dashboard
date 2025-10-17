@@ -72,8 +72,9 @@
         <label>Date format:</label>
         <select id="dateFmt">
           <option value="auto">Auto detect</option>
-          <option value="DD/MM/YYYY">DD/MM/YYYY (e.g. 31/08/2025)</option>
-          <option value="MM/DD/YYYY">MM/DD/YYYY (e.g. 08/31/2025)</option>
+          <option value="DD/MM/YY" selected>DD/MM/YY (e.g. 31/08/25)</option>
+          <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+          <option value="MM/DD/YYYY">MM/DD/YYYY</option>
           <option value="YYYY-MM-DD">YYYY-MM-DD</option>
           <option value="DD-MM-YYYY">DD-MM-YYYY</option>
           <option value="YYYY/MM/DD">YYYY/MM/DD</option>
@@ -101,10 +102,8 @@
 dayjs.extend(dayjs_plugin_customParseFormat);
 
 // ---- config & colors ----
-const HOVER_INDICES = [4,5,6,7,8,9,12]; // E..J & M (0-based positions in the *original* CSV)
-const COLOR = {
-  onTrack: '#A5D6A7', spendMore: '#FFF59D', red: '#EF9A9A', absent: '#CFD8DC', none: '#EEEEEE'
-};
+const HOVER_INDICES = [4,5,6,7,8,9,12]; // E..J & M
+const COLOR = { onTrack:'#A5D6A7', spendMore:'#FFF59D', red:'#EF9A9A', absent:'#CFD8DC', none:'#EEEEEE' };
 
 // ---- state ----
 let mipRows = [], absRows = [];
@@ -154,13 +153,16 @@ const toISODate = (v, fmt) => {
     const d = dayjs(v, fmt, true);
     return d.isValid() ? d.format('YYYY-MM-DD') : null;
   }
-  // auto: try native, then common formats
+  // auto: try common 4-digit and 2-digit year patterns
   let d = dayjs(v);
   if (!d.isValid()) d = dayjs(v, 'YYYY-MM-DD', true);
   if (!d.isValid()) d = dayjs(v, 'DD/MM/YYYY', true);
   if (!d.isValid()) d = dayjs(v, 'MM/DD/YYYY', true);
   if (!d.isValid()) d = dayjs(v, 'DD-MM-YYYY', true);
   if (!d.isValid()) d = dayjs(v, 'YYYY/MM/DD', true);
+  if (!d.isValid()) d = dayjs(v, 'DD/MM/YY', true);
+  if (!d.isValid()) d = dayjs(v, 'MM/DD/YY', true);
+  if (!d.isValid()) d = dayjs(v, 'DD-MM-YY', true);
   return d.isValid() ? d.format('YYYY-MM-DD') : null;
 };
 
@@ -196,7 +198,7 @@ async function loadCSVs() {
   const guesses = {
     name:  findCol(mipRows, ['name','student name','learner','child']) || allCols[0],
     subj:  findCol(mipRows, ['subject','course','class']) || '',
-    mip:   findCol(mipRows, ['mip','status','progress','metric']) || allCols.find(c=>/mip|status|progress|metric/i.test(c)) || allCols[0],
+    mip:   findCol(mipRows, ['mip','status','progress','metric']) || allCols[0],
     date:  findCol(mipRows, ['date','activity date','session date','day']) || allCols.find(c=>/date|day/i.test(c)) || allCols[0],
   };
 
@@ -219,7 +221,7 @@ function buildCalendar() {
   const subjCol = els.subjCol.value || null;
   const mipCol  = els.mipCol.value;
   const dateCol = els.dateCol.value;
-  const fmt     = els.dateFmt.value;
+  const fmt     = els.dateFmt.value; // default preselected to DD/MM/YY
 
   if (!mipRows.length) { els.status.textContent = 'Load CSVs first.'; return; }
 
@@ -229,28 +231,17 @@ function buildCalendar() {
       const iso = toISODate(r[dateCol], fmt);
       if (!iso) return null;
       const rowKey = subjCol ? JSON.stringify([String(r[nameCol]||''), String(r[subjCol]||'')]) : String(r[nameCol]||'');
-      return {
-        __date: iso,
-        __row: rowKey,
-        __name: String(r[nameCol]||''),
-        __subj: subjCol ? String(r[subjCol]||'') : '',
-        __mip:  r[mipCol],
-        _raw: r
-      };
+      return { __date: iso, __row: rowKey, __name: String(r[nameCol]||''), __subj: subjCol ? String(r[subjCol]||'') : '', __mip: r[mipCol], _raw: r };
     })
     .filter(Boolean);
 
-  if (!rows.length) {
-    els.status.textContent = 'No valid dates after parsing. Try another Date format.';
-    return;
-  }
+  if (!rows.length) { els.status.textContent = 'No valid dates after parsing. Check Date column/format.'; return; }
 
-  // tooltips from E..J and M by index
+  // tooltips from E..J and M
   const mkTip = (r) => {
     const parts = [];
-    for (const idx of HOVER_INDICES) {
-      const k = allCols[idx];
-      if (k) parts.push(`${k}: ${r._raw[k] ?? ''}`);
+    for (const idx of [4,5,6,7,8,9,12]) {
+      const k = allCols[idx]; if (k) parts.push(`${k}: ${r._raw[k] ?? ''}`);
     }
     return parts.join('\n');
   };
@@ -261,14 +252,12 @@ function buildCalendar() {
   const dedup = Array.from(map.values());
 
   // absences
-  const absPairs = new Set();
-  const absNameDate = new Set();
+  const absPairs = new Set(), absNameDate = new Set();
   if (absRows.length) {
-    const aName = findCol(absRows, [nameCol,'name','student name','learner','child']) || Object.keys(absRows[0])[0];
-    const aSubj = subjCol ? findCol(absRows, [subjCol,'subject','course','class']) : null;
-    const aDate = findCol(absRows, ['date','activity date','session date','day']) || dateCol;
+    const aName = findCol(absRows, [els.nameCol.value,'name','student name','learner','child']) || Object.keys(absRows[0])[0];
+    const aSubj = subjCol ? findCol(absRows, [els.subjCol.value,'subject','course','class']) : null;
+    const aDate = findCol(absRows, ['date','activity date','session date','day']) || els.dateCol.value;
     const aFlag = findCol(absRows, ['absent','attendance','status']);
-
     absRows.forEach(r => {
       const iso = toISODate(r[aDate], fmt) || toISODate(r[aDate], 'auto');
       const flag = aFlag ? String(r[aFlag]||'').trim().toLowerCase() : 'absent';
@@ -288,13 +277,8 @@ function buildCalendar() {
   const dates = Array.from(new Set(dedup.map(r => r.__date))).sort();
 
   // maps
-  const valMap = new Map();
-  const tipMap = new Map();
-  dedup.forEach(r => {
-    const key = r.__row + '|' + r.__date;
-    valMap.set(key, r.__mip);
-    tipMap.set(key, mkTip(r));
-  });
+  const valMap = new Map(), tipMap = new Map();
+  dedup.forEach(r => { const k=r.__row+'|'+r.__date; valMap.set(k, r.__mip); tipMap.set(k, mkTip(r)); });
 
   // render header
   els.thead.innerHTML = '';
@@ -325,16 +309,10 @@ function buildCalendar() {
       td.style.textAlign='center'; td.style.minWidth='90px'; td.style.padding='6px 8px'; td.style.border='1px solid #eee';
       const k = rowKey + '|' + d;
       const tip = tipMap.get(k); if (tip) td.title = tip;
-
       const baseName = name || '';
       const isAbsent = absPairs.has(JSON.stringify([rowKey, d])) || absNameDate.has(JSON.stringify([baseName, d]));
-      if (isAbsent) {
-        td.style.background = COLOR.absent; td.textContent = 'Absent';
-      } else {
-        const v = valMap.get(k);
-        td.style.background = statusColor(v);
-        td.textContent = (v==null ? '' : String(v));
-      }
+      if (isAbsent) { td.style.background = COLOR.absent; td.textContent = 'Absent'; }
+      else { const v = valMap.get(k); td.style.background = statusColor(v); td.textContent = (v==null ? '' : String(v)); }
       tr.appendChild(td);
     });
 
@@ -378,7 +356,7 @@ function buildCalendar() {
 
 // wire up
 document.getElementById('reload').onclick = loadCSVs;
-document.getElementById('build').onclick = buildCalendar;
+document.getElementById('build').onclick   = buildCalendar;
 
 // auto-load on first visit
 loadCSVs();
