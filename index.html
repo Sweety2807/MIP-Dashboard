@@ -4,18 +4,24 @@
   <meta charset="utf-8" />
   <title>📅 MIP Calendar</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- PapaParse for robust CSV parsing -->
+  <!-- CSV + date parsing libs -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/customParseFormat.js"></script>
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; margin: 24px; }
-    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-    th, td { border: 1px solid #e5e7eb; }
-    thead th { position: sticky; top: 0; background: #f8fafc; z-index: 3; }
-    tbody th { background: #fff; }
-    .container { overflow:auto; max-width: 100%; }
-    .controls > * { margin-right: 12px; }
-    #q { padding:6px 10px; border:1px solid #cbd5e1; border-radius:8px; }
-    .chip { padding:4px 8px; border-radius:8px; margin-left:8px; display:inline-block; }
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;margin:24px;}
+    table{border-collapse:collapse;width:100%;table-layout:fixed}
+    th,td{border:1px solid #e5e7eb}
+    thead th{position:sticky;top:0;background:#f8fafc;z-index:3}
+    tbody th{background:#fff}
+    .container{overflow:auto;max-width:100%}
+    .controls>*{margin-right:12px}
+    #q{padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px}
+    .chip{padding:4px 8px;border-radius:8px;margin-left:8px;display:inline-block}
+    .panel{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:8px 0 16px 0;background:#fafafa}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    select,input[type="text"]{padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px}
+    button{padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;cursor:pointer}
   </style>
 </head>
 <body>
@@ -30,6 +36,51 @@
     <span class="chip" style="background:#EF9A9A;">Low Efficiency / Idling</span>
     <span class="chip" style="background:#CFD8DC;">Absent</span>
     <span class="chip" style="background:#EEEEEE;">No Data</span>
+  </div>
+
+  <!-- Mapping panel -->
+  <div class="panel">
+    <div class="row">
+      <div>
+        <label>MIP CSV:</label>
+        <input id="mipFileName" value="mip.csv" style="width:180px"/>
+      </div>
+      <div>
+        <label>Absent CSV (optional):</label>
+        <input id="absFileName" value="absent.csv" style="width:180px"/>
+      </div>
+      <button id="reload">Load CSVs</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>Name column:</label>
+        <select id="nameCol"></select>
+      </div>
+      <div>
+        <label>Subject column:</label>
+        <select id="subjCol"></select>
+      </div>
+      <div>
+        <label>MIP column:</label>
+        <select id="mipCol"></select>
+      </div>
+      <div>
+        <label>Date column:</label>
+        <select id="dateCol"></select>
+      </div>
+      <div>
+        <label>Date format:</label>
+        <select id="dateFmt">
+          <option value="auto">Auto detect</option>
+          <option value="DD/MM/YYYY">DD/MM/YYYY (e.g. 31/08/2025)</option>
+          <option value="MM/DD/YYYY">MM/DD/YYYY (e.g. 08/31/2025)</option>
+          <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+          <option value="DD-MM-YYYY">DD-MM-YYYY</option>
+          <option value="YYYY/MM/DD">YYYY/MM/DD</option>
+        </select>
+      </div>
+      <button id="build">Build Calendar</button>
+    </div>
   </div>
 
   <div class="controls" style="margin:8px 0 12px 0;">
@@ -47,317 +98,290 @@
   <p id="status" style="margin-top:12px;color:#64748b;"></p>
 
 <script>
-(async function () {
-  // Config
-  const MIP_FILE = 'mip.csv';           // required
-  const ABSENT_FILE = 'absent.csv';     // optional
-  const HOVER_INDICES = [4,5,6,7,8,9,12]; // E..J and M (0-based)
+dayjs.extend(dayjs_plugin_customParseFormat);
 
-  // Colors
-  const COLOR = {
-    onTrack: '#A5D6A7',
-    spendMore: '#FFF59D',
-    red: '#EF9A9A',
-    absent: '#CFD8DC',
-    none: '#EEEEEE'
-  };
+// ---- config & colors ----
+const HOVER_INDICES = [4,5,6,7,8,9,12]; // E..J & M (0-based positions in the *original* CSV)
+const COLOR = {
+  onTrack: '#A5D6A7', spendMore: '#FFF59D', red: '#EF9A9A', absent: '#CFD8DC', none: '#EEEEEE'
+};
 
-  const statusEl = document.getElementById('status');
+// ---- state ----
+let mipRows = [], absRows = [];
+let allCols = [];
+const els = {
+  nameCol: document.getElementById('nameCol'),
+  subjCol: document.getElementById('subjCol'),
+  mipCol:  document.getElementById('mipCol'),
+  dateCol: document.getElementById('dateCol'),
+  dateFmt: document.getElementById('dateFmt'),
+  thead:   document.getElementById('thead'),
+  tbody:   document.getElementById('tbody'),
+  q:       document.getElementById('q'),
+  status:  document.getElementById('status'),
+  subjects:document.getElementById('subjects'),
+  mipFileName: document.getElementById('mipFileName'),
+  absFileName: document.getElementById('absFileName'),
+};
 
-  // Utils
-  const parseCSV = async (url) => {
-    const res = await fetch(url, {cache:'no-store'});
-    if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
-    const text = await res.text();
-    return new Promise((resolve, reject) => {
-      Papa.parse(text, {
-        header: true,
-        skipEmptyLines: true,
-        dynamicTyping: false,
-        complete: (result) => resolve(result.data),
-        error: reject
-      });
-    });
-  };
+// ---- helpers ----
+const parseCSV = async (url) => {
+  const res = await fetch(url, {cache:'no-store'});
+  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
+  const text = await res.text();
+  return new Promise((resolve, reject) => {
+    Papa.parse(text, {header:true, skipEmptyLines:true, complete: r=>resolve(r.data), error: reject});
+  });
+};
 
-  const findCol = (rows, candidates) => {
-    if (!rows.length) return null;
-    const cols = Object.keys(rows[0]);
-    // exact
-    for (const cand of candidates) {
-      const hit = cols.find(c => c.toLowerCase() === cand.toLowerCase());
-      if (hit) return hit;
-    }
-    // contains
-    for (const cand of candidates) {
-      const hit = cols.find(c => c.toLowerCase().includes(cand.toLowerCase()));
-      if (hit) return hit;
-    }
-    return null;
-  };
-
-  const detectDateCol = (rows) => {
-    const preferred = findCol(rows, ["date","activity date","session date","day"]);
-    if (preferred) return preferred;
-    const cols = Object.keys(rows[0] || {});
-    let best = null, bestScore = 0;
-    for (const c of cols) {
-      let ok = 0;
-      for (const r of rows.slice(0, 200)) {
-        const v = r[c];
-        if (v && !isNaN(Date.parse(v))) ok++;
-      }
-      const score = ok / Math.min(rows.length, 200);
-      if (score > bestScore) { bestScore = score; best = c; }
-    }
-    return best;
-  };
-
-  const toISODate = (v) => {
-    const d = new Date(v);
-    if (isNaN(d)) return null;
-    // Use YYYY-MM-DD only
-    const iso = d.toISOString();
-    return iso.slice(0,10);
-  };
-
-  const statusColor = (val) => {
-    if (val == null || val === "") return COLOR.none;
-    const s = String(val).trim().toLowerCase();
-    if (s === "on track") return COLOR.onTrack;
-    if (s === "spend more time") return COLOR.spendMore;
-    if (s === "probable idling/inflated time" || s.includes("low efficiency") || s.includes("idling") || s.includes("inflated")) return COLOR.red;
-    // default gray
-    return COLOR.none;
-  };
-
-  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-
-  try {
-    // Load MIP
-    const mip = await parseCSV(MIP_FILE);
-
-    if (!mip.length) {
-      statusEl.textContent = "No rows in mip.csv";
-      return;
-    }
-
-    // Detect columns
-    const nameCol = findCol(mip, ["name","student name","learner","child"]) || Object.keys(mip[0])[0];
-    const subjectCol = findCol(mip, ["subject","course","class"]); // optional
-    const mipCol = findCol(mip, ["mip","status","progress","metric"]);
-    const dateCol = detectDateCol(mip);
-
-    if (!mipCol || !dateCol) {
-      statusEl.textContent = `Could not detect needed columns. Found: ${Object.keys(mip[0]).join(", ")}`;
-      return;
-    }
-
-    // Normalize dates; build row key
-    for (const r of mip) r.__date = toISODate(r[dateCol]);
-    const mipClean = mip.filter(r => r.__date);
-
-    for (const r of mipClean) {
-      r.__row = subjectCol ? JSON.stringify([String(r[nameCol]||""), String(r[subjectCol]||"")]) : String(r[nameCol]||"");
-    }
-
-    // Tooltips (columns E..J and M by index among the original order)
-    const allCols = Object.keys(mip[0] || {});
-    const mkTooltip = (r) => {
-      const parts = [];
-      for (const idx of HOVER_INDICES) {
-        if (idx >= 0 && idx < allCols.length) {
-          const k = allCols[idx];
-          parts.push(`${k}: ${r[k] ?? ""}`);
-        }
-      }
-      return parts.join("\n");
-    };
-    for (const r of mipClean) r.__tip = mkTooltip(r);
-
-    // Deduplicate per (__row, __date), keep last
-    const keySet = new Set();
-    const mipDedup = [];
-    for (const r of mipClean) {
-      const key = r.__row + "|" + r.__date;
-      if (keySet.has(key)) continue;
-      keySet.add(key);
-      mipDedup.push(r);
-    }
-
-    // Absent (optional)
-    let absentPairs = new Set();      // key: JSON.stringify([rowKey, date])
-    let absentNameDate = new Set();   // key: JSON.stringify([name, date])
-    try {
-      const abs = await parseCSV(ABSENT_FILE);
-      if (abs.length) {
-        const aName = findCol(abs, [nameCol,"name","student name","learner","child"]) || Object.keys(abs[0])[0];
-        const aSubj = subjectCol ? findCol(abs, [subjectCol,"subject","course","class"]) : null;
-        const aDate = findCol(abs, ["date","activity date","session date","day"]) || dateCol;
-        const aFlag = findCol(abs, ["absent","attendance","status"]);
-
-        for (const r of abs) {
-          const flag = aFlag ? String(r[aFlag]||"").trim().toLowerCase() : "absent";
-          const isAbsent = ["absent","a","true","1","yes"].includes(flag) || aFlag == null; // if no flag, treat rows as absent
-          const d = toISODate(r[aDate]);
-          if (!isAbsent || !d) continue;
-
-          if (subjectCol && aSubj) {
-            const rowKey = JSON.stringify([String(r[aName]||""), String(r[aSubj]||"")]);
-            absentPairs.add(JSON.stringify([rowKey, d]));
-          } else {
-            absentNameDate.add(JSON.stringify([String(r[aName]||""), d]));
-          }
-        }
-      }
-    } catch (e) {
-      // No absent.csv present is fine
-    }
-
-    // Build pivot indices
-    const rowKeys = Array.from(new Set(mipDedup.map(r => r.__row)));
-    const dates = Array.from(new Set(mipDedup.map(r => r.__date))).sort();
-
-    // Map rowKey+date -> MIP and tip
-    const valMap = new Map();
-    const tipMap = new Map();
-    for (const r of mipDedup) {
-      valMap.set(r.__row + "|" + r.__date, r[mipCol]);
-      tipMap.set(r.__row + "|" + r.__date, r.__tip);
-    }
-
-    // Helpers to split name/subject
-    const splitRow = (rowKey) => {
-      try {
-        const arr = JSON.parse(rowKey);
-        return {name: arr[0], subject: arr[1] ?? ""};
-      } catch {
-        return {name: rowKey, subject: ""};
-      }
-    };
-
-    // Build THEAD
-    const thead = document.getElementById('thead');
-    const thRow = document.createElement('tr');
-    const thName = document.createElement('th');
-    thName.style.position = 'sticky'; thName.style.left = '0'; thName.style.background = '#fafafa'; thName.style.zIndex = '3';
-    thName.textContent = 'Name';
-    const thSubj = document.createElement('th');
-    thSubj.style.position = 'sticky'; thSubj.style.left = '120px'; thSubj.style.background = '#fafafa'; thSubj.style.zIndex = '3';
-    thSubj.textContent = 'Subject';
-    thRow.append(thName, thSubj);
-    for (const d of dates) {
-      const th = document.createElement('th');
-      th.textContent = d;
-      thRow.appendChild(th);
-    }
-    thead.appendChild(thRow);
-
-    // Build TBODY rows
-    const tbody = document.getElementById('tbody');
-    const subjects = new Set();
-
-    rowKeys.forEach(rowKey => {
-      const {name, subject} = splitRow(rowKey);
-      if (subject) subjects.add(subject);
-
-      const tr = document.createElement('tr');
-      tr.setAttribute('data-subject', subject || "");
-
-      const thN = document.createElement('th');
-      thN.style.position = 'sticky'; thN.style.left = '0'; thN.style.background = '#fff'; thN.style.zIndex = '2';
-      thN.style.textAlign = 'left'; thN.style.whiteSpace = 'nowrap';
-      thN.textContent = name || "";
-      const thS = document.createElement('th');
-      thS.style.position = 'sticky'; thS.style.left = '120px'; thS.style.background = '#fff'; thS.style.zIndex = '2';
-      thS.style.textAlign = 'left'; thS.style.whiteSpace = 'nowrap';
-      thS.textContent = subject || "";
-
-      tr.append(thN, thS);
-
-      for (const d of dates) {
-        const td = document.createElement('td');
-        td.style.textAlign = 'center';
-        td.style.minWidth = '90px';
-        td.style.padding = '6px 8px';
-        td.style.border = '1px solid #eee';
-
-        const key = rowKey + "|" + d;
-        const tip = tipMap.get(key);
-        if (tip) td.title = tip;
-
-        // Absent?
-        const baseName = splitRow(rowKey).name || "";
-        const isAbsent = absentPairs.has(JSON.stringify([rowKey, d])) ||
-                         absentNameDate.has(JSON.stringify([baseName, d]));
-
-        if (isAbsent) {
-          td.style.background = COLOR.absent;
-          td.textContent = "Absent";
-        } else {
-          const v = valMap.get(key);
-          td.style.background = statusColor(v);
-          td.textContent = (v == null ? "" : String(v));
-        }
-
-        tr.appendChild(td);
-      }
-
-      tbody.appendChild(tr);
-    });
-
-    // Subject multi-select checkboxes
-    const subjDiv = document.getElementById('subjects');
-    const subjList = Array.from(subjects).sort();
-    if (subjList.length) {
-      const wrap = document.createElement('div');
-      wrap.style.marginTop = '6px';
-      let htmlChecks = '<strong>Subjects:</strong> ';
-      for (const s of subjList) {
-        htmlChecks += `<label style="margin-right:12px;"><input type="checkbox" class="subj" value="${escapeHtml(s)}" checked/> ${escapeHtml(s)}</label>`;
-      }
-      htmlChecks += `<button onclick="selectAllSubjects(true)" style="margin-left:8px;padding:4px 8px;">Select All</button>`;
-      htmlChecks += `<button onclick="selectAllSubjects(false)" style="margin-left:6px;padding:4px 8px;">Clear</button>`;
-      wrap.innerHTML = htmlChecks;
-      subjDiv.appendChild(wrap);
-    }
-
-    // Filtering
-    const filterRows = () => {
-      const q = (document.getElementById('q')?.value || "").toLowerCase();
-      const trs = document.querySelectorAll('tbody tr');
-      const chk = document.querySelectorAll('input.subj');
-      const useSubj = chk.length > 0;
-      const sel = new Set();
-      chk.forEach(b => { if (b.checked) sel.add(b.value.toLowerCase()); });
-
-      trs.forEach(tr => {
-        const nameTxt = tr.children[0].textContent.toLowerCase();
-        const subjTxt = (tr.getAttribute('data-subject') || tr.children[1].textContent).toLowerCase();
-        const matchQ = !q || nameTxt.includes(q) || subjTxt.includes(q);
-        const matchS = !useSubj || sel.has(subjTxt) || subjTxt === "";
-        tr.style.display = (matchQ && matchS) ? '' : 'none';
-      });
-    };
-
-    window.selectAllSubjects = (state) => {
-      document.querySelectorAll('input.subj').forEach(b => b.checked = state);
-      filterRows();
-    };
-
-    document.getElementById('q').addEventListener('input', filterRows);
-    document.addEventListener('change', (e) => {
-      if (e.target && e.target.classList.contains('subj')) filterRows();
-    });
-
-    // Initial filter run
-    filterRows();
-    statusEl.textContent = "Loaded mip.csv" + (absentPairs.size || absentNameDate.size ? " + absent.csv" : "");
-  } catch (e) {
-    document.getElementById('status').textContent = "Error: " + e.message;
-    console.error(e);
+const findCol = (rows, candidates) => {
+  if (!rows.length) return null;
+  const cols = Object.keys(rows[0]);
+  for (const cand of candidates) {
+    const hit = cols.find(c => c.toLowerCase() === cand.toLowerCase());
+    if (hit) return hit;
   }
-})();
+  for (const cand of candidates) {
+    const hit = cols.find(c => c.toLowerCase().includes(cand.toLowerCase()));
+    if (hit) return hit;
+  }
+  return null;
+};
+
+const toISODate = (v, fmt) => {
+  if (!v) return null;
+  if (fmt && fmt !== 'auto') {
+    const d = dayjs(v, fmt, true);
+    return d.isValid() ? d.format('YYYY-MM-DD') : null;
+  }
+  // auto: try native, then common formats
+  let d = dayjs(v);
+  if (!d.isValid()) d = dayjs(v, 'YYYY-MM-DD', true);
+  if (!d.isValid()) d = dayjs(v, 'DD/MM/YYYY', true);
+  if (!d.isValid()) d = dayjs(v, 'MM/DD/YYYY', true);
+  if (!d.isValid()) d = dayjs(v, 'DD-MM-YYYY', true);
+  if (!d.isValid()) d = dayjs(v, 'YYYY/MM/DD', true);
+  return d.isValid() ? d.format('YYYY-MM-DD') : null;
+};
+
+const statusColor = (val) => {
+  if (val == null || val === "") return COLOR.none;
+  const s = String(val).trim().toLowerCase();
+  if (s === "on track") return COLOR.onTrack;
+  if (s === "spend more time") return COLOR.spendMore;
+  if (s === "probable idling/inflated time" || s.includes("low efficiency") || s.includes("idling") || s.includes("inflated")) return COLOR.red;
+  return COLOR.none;
+};
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+// ---- load & guess columns ----
+async function loadCSVs() {
+  els.status.textContent = 'Loading...';
+  try {
+    mipRows = await parseCSV(els.mipFileName.value.trim());
+    els.status.textContent = 'Loaded ' + els.mipFileName.value.trim();
+  } catch(e) {
+    els.status.textContent = 'Could not load ' + els.mipFileName.value.trim() + ': ' + e.message;
+    mipRows = [];
+  }
+  try {
+    absRows = await parseCSV(els.absFileName.value.trim());
+    els.status.textContent += ' + ' + els.absFileName.value.trim();
+  } catch { absRows = []; }
+
+  if (!mipRows.length) return;
+
+  allCols = Object.keys(mipRows[0]);
+  const guesses = {
+    name:  findCol(mipRows, ['name','student name','learner','child']) || allCols[0],
+    subj:  findCol(mipRows, ['subject','course','class']) || '',
+    mip:   findCol(mipRows, ['mip','status','progress','metric']) || allCols.find(c=>/mip|status|progress|metric/i.test(c)) || allCols[0],
+    date:  findCol(mipRows, ['date','activity date','session date','day']) || allCols.find(c=>/date|day/i.test(c)) || allCols[0],
+  };
+
+  // populate selects
+  const fill = (sel, allowEmpty=false) => {
+    sel.innerHTML = allowEmpty ? '<option value="">(none)</option>' : '';
+    for (const c of allCols) sel.innerHTML += `<option value="${esc(c)}">${esc(c)}</option>`;
+  };
+  fill(els.nameCol); fill(els.subjCol, true); fill(els.mipCol); fill(els.dateCol);
+
+  els.nameCol.value = guesses.name;
+  els.subjCol.value = guesses.subj;
+  els.mipCol.value  = guesses.mip;
+  els.dateCol.value = guesses.date;
+}
+
+// ---- build calendar ----
+function buildCalendar() {
+  const nameCol = els.nameCol.value;
+  const subjCol = els.subjCol.value || null;
+  const mipCol  = els.mipCol.value;
+  const dateCol = els.dateCol.value;
+  const fmt     = els.dateFmt.value;
+
+  if (!mipRows.length) { els.status.textContent = 'Load CSVs first.'; return; }
+
+  // Normalize dates & build keys
+  const rows = mipRows
+    .map(r => {
+      const iso = toISODate(r[dateCol], fmt);
+      if (!iso) return null;
+      const rowKey = subjCol ? JSON.stringify([String(r[nameCol]||''), String(r[subjCol]||'')]) : String(r[nameCol]||'');
+      return {
+        __date: iso,
+        __row: rowKey,
+        __name: String(r[nameCol]||''),
+        __subj: subjCol ? String(r[subjCol]||'') : '',
+        __mip:  r[mipCol],
+        _raw: r
+      };
+    })
+    .filter(Boolean);
+
+  if (!rows.length) {
+    els.status.textContent = 'No valid dates after parsing. Try another Date format.';
+    return;
+  }
+
+  // tooltips from E..J and M by index
+  const mkTip = (r) => {
+    const parts = [];
+    for (const idx of HOVER_INDICES) {
+      const k = allCols[idx];
+      if (k) parts.push(`${k}: ${r._raw[k] ?? ''}`);
+    }
+    return parts.join('\n');
+  };
+
+  // keep last per (__row,__date)
+  const map = new Map();
+  rows.forEach(r => map.set(r.__row + '|' + r.__date, r));
+  const dedup = Array.from(map.values());
+
+  // absences
+  const absPairs = new Set();
+  const absNameDate = new Set();
+  if (absRows.length) {
+    const aName = findCol(absRows, [nameCol,'name','student name','learner','child']) || Object.keys(absRows[0])[0];
+    const aSubj = subjCol ? findCol(absRows, [subjCol,'subject','course','class']) : null;
+    const aDate = findCol(absRows, ['date','activity date','session date','day']) || dateCol;
+    const aFlag = findCol(absRows, ['absent','attendance','status']);
+
+    absRows.forEach(r => {
+      const iso = toISODate(r[aDate], fmt) || toISODate(r[aDate], 'auto');
+      const flag = aFlag ? String(r[aFlag]||'').trim().toLowerCase() : 'absent';
+      const isAbsent = ['absent','a','true','1','yes'].includes(flag) || (aFlag==null);
+      if (!iso || !isAbsent) return;
+      if (aSubj) {
+        const key = JSON.stringify([String(r[aName]||''), String(r[aSubj]||'')]);
+        absPairs.add(JSON.stringify([key, iso]));
+      } else {
+        absNameDate.add(JSON.stringify([String(r[aName]||''), iso]));
+      }
+    });
+  }
+
+  // row keys & dates
+  const rowKeys = Array.from(new Set(dedup.map(r => r.__row)));
+  const dates = Array.from(new Set(dedup.map(r => r.__date))).sort();
+
+  // maps
+  const valMap = new Map();
+  const tipMap = new Map();
+  dedup.forEach(r => {
+    const key = r.__row + '|' + r.__date;
+    valMap.set(key, r.__mip);
+    tipMap.set(key, mkTip(r));
+  });
+
+  // render header
+  els.thead.innerHTML = '';
+  const trh = document.createElement('tr');
+  const thN = document.createElement('th'); thN.style.position='sticky'; thN.style.left='0'; thN.style.background='#fafafa'; thN.style.zIndex='3'; thN.textContent='Name';
+  const thS = document.createElement('th'); thS.style.position='sticky'; thS.style.left='120px'; thS.style.background='#fafafa'; thS.style.zIndex='3'; thS.textContent='Subject';
+  trh.append(thN, thS);
+  dates.forEach(d => { const th=document.createElement('th'); th.textContent=d; trh.appendChild(th); });
+  els.thead.appendChild(trh);
+
+  // rows
+  els.tbody.innerHTML = '';
+  const subjects = new Set();
+  rowKeys.forEach(rowKey => {
+    let name = rowKey, subject = '';
+    try { const a=JSON.parse(rowKey); name=a[0]; subject=a[1]||''; } catch {}
+    if (subject) subjects.add(subject);
+
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-subject', subject || '');
+
+    const th1 = document.createElement('th'); th1.style.position='sticky'; th1.style.left='0'; th1.style.background='#fff'; th1.style.zIndex='2'; th1.style.textAlign='left'; th1.style.whiteSpace='nowrap'; th1.textContent = name || '';
+    const th2 = document.createElement('th'); th2.style.position='sticky'; th2.style.left='120px'; th2.style.background='#fff'; th2.style.zIndex='2'; th2.style.textAlign='left'; th2.style.whiteSpace='nowrap'; th2.textContent = subject || '';
+    tr.append(th1, th2);
+
+    dates.forEach(d => {
+      const td = document.createElement('td');
+      td.style.textAlign='center'; td.style.minWidth='90px'; td.style.padding='6px 8px'; td.style.border='1px solid #eee';
+      const k = rowKey + '|' + d;
+      const tip = tipMap.get(k); if (tip) td.title = tip;
+
+      const baseName = name || '';
+      const isAbsent = absPairs.has(JSON.stringify([rowKey, d])) || absNameDate.has(JSON.stringify([baseName, d]));
+      if (isAbsent) {
+        td.style.background = COLOR.absent; td.textContent = 'Absent';
+      } else {
+        const v = valMap.get(k);
+        td.style.background = statusColor(v);
+        td.textContent = (v==null ? '' : String(v));
+      }
+      tr.appendChild(td);
+    });
+
+    els.tbody.appendChild(tr);
+  });
+
+  // subject checkboxes
+  els.subjects.innerHTML = '';
+  const subjList = Array.from(subjects).sort();
+  if (subjList.length) {
+    const wrap = document.createElement('div'); wrap.style.marginTop='6px';
+    let htmlChecks = '<strong>Subjects:</strong> ';
+    subjList.forEach(s => { htmlChecks += `<label style="margin-right:12px;"><input type="checkbox" class="subj" value="${esc(s)}" checked/> ${esc(s)}</label>`; });
+    htmlChecks += `<button onclick="selectAllSubjects(true)" style="margin-left:8px;">Select All</button>`;
+    htmlChecks += `<button onclick="selectAllSubjects(false)" style="margin-left:6px;">Clear</button>`;
+    wrap.innerHTML = htmlChecks; els.subjects.appendChild(wrap);
+  }
+
+  // filtering
+  const filterRows = () => {
+    const q = (els.q.value || '').toLowerCase();
+    const trs = document.querySelectorAll('tbody tr');
+    const chk = document.querySelectorAll('input.subj');
+    const useSubj = chk.length > 0;
+    const sel = new Set(); chk.forEach(b => { if (b.checked) sel.add(b.value.toLowerCase()); });
+    trs.forEach(tr => {
+      const nameTxt = tr.children[0].textContent.toLowerCase();
+      const subjTxt = (tr.getAttribute('data-subject') || tr.children[1].textContent).toLowerCase();
+      const matchQ = !q || nameTxt.includes(q) || subjTxt.includes(q);
+      const matchS = !useSubj || sel.has(subjTxt) || subjTxt === '';
+      tr.style.display = (matchQ && matchS) ? '' : 'none';
+    });
+  };
+  window.selectAllSubjects = (state) => { document.querySelectorAll('input.subj').forEach(b => b.checked=state); filterRows(); };
+  els.q.oninput = filterRows;
+  document.addEventListener('change', e => { if (e.target && e.target.classList.contains('subj')) filterRows(); });
+  filterRows();
+
+  els.status.textContent = `Built ${dates.length} date columns · ${rowKeys.length} rows`;
+}
+
+// wire up
+document.getElementById('reload').onclick = loadCSVs;
+document.getElementById('build').onclick = buildCalendar;
+
+// auto-load on first visit
+loadCSVs();
 </script>
 </body>
 </html>
