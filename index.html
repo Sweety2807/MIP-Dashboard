@@ -22,6 +22,19 @@
     .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
     select,input[type="text"]{padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px}
     button{padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;cursor:pointer}
+
+    /* --- NEW: student separators --- */
+    /* Thick separator line before each new student's first row */
+    tbody tr.student-sep th,
+    tbody tr.student-sep td {
+      border-top: 3px solid #94a3b8; /* slate-400 */
+    }
+    /* Optional spacer row (blank line) between students */
+    tbody tr.student-gap td {
+      padding: 4px 0 !important;
+      border: none !important;
+      background: transparent !important;
+    }
   </style>
 </head>
 <body>
@@ -101,11 +114,12 @@
 <script>
 dayjs.extend(dayjs_plugin_customParseFormat);
 
-// ---- config & colors ----
+// ===== Config =====
 const HOVER_INDICES = [4,5,6,7,8,9,12]; // E..J & M
 const COLOR = { onTrack:'#A5D6A7', spendMore:'#FFF59D', red:'#EF9A9A', absent:'#CFD8DC', none:'#EEEEEE' };
+const USE_STUDENT_GAP = false; // set to true if you also want a blank gap row between students
 
-// ---- state ----
+// ===== State & Elements =====
 let mipRows = [], absRows = [];
 let allCols = [];
 const els = {
@@ -123,7 +137,7 @@ const els = {
   absFileName: document.getElementById('absFileName'),
 };
 
-// ---- helpers ----
+// ===== Helpers =====
 const parseCSV = async (url) => {
   const res = await fetch(url, {cache:'no-store'});
   if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
@@ -136,24 +150,15 @@ const parseCSV = async (url) => {
 const findCol = (rows, candidates) => {
   if (!rows.length) return null;
   const cols = Object.keys(rows[0]);
-  for (const cand of candidates) {
-    const hit = cols.find(c => c.toLowerCase() === cand.toLowerCase());
-    if (hit) return hit;
-  }
-  for (const cand of candidates) {
-    const hit = cols.find(c => c.toLowerCase().includes(cand.toLowerCase()));
-    if (hit) return hit;
-  }
+  for (const cand of candidates) { const hit = cols.find(c => c.toLowerCase() === cand.toLowerCase()); if (hit) return hit; }
+  for (const cand of candidates) { const hit = cols.find(c => c.toLowerCase().includes(cand.toLowerCase())); if (hit) return hit; }
   return null;
 };
 
 const toISODate = (v, fmt) => {
   if (!v) return null;
-  if (fmt && fmt !== 'auto') {
-    const d = dayjs(v, fmt, true);
-    return d.isValid() ? d.format('YYYY-MM-DD') : null;
-  }
-  // auto: try common 4-digit and 2-digit year patterns
+  if (fmt && fmt !== 'auto') { const d = dayjs(v, fmt, true); return d.isValid() ? d.format('YYYY-MM-DD') : null; }
+  // auto: common 4-digit + 2-digit year patterns
   let d = dayjs(v);
   if (!d.isValid()) d = dayjs(v, 'YYYY-MM-DD', true);
   if (!d.isValid()) d = dayjs(v, 'DD/MM/YYYY', true);
@@ -177,20 +182,13 @@ const statusColor = (val) => {
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
-// ---- load & guess columns ----
+// ===== Load CSVs & guess columns =====
 async function loadCSVs() {
   els.status.textContent = 'Loading...';
-  try {
-    mipRows = await parseCSV(els.mipFileName.value.trim());
-    els.status.textContent = 'Loaded ' + els.mipFileName.value.trim();
-  } catch(e) {
-    els.status.textContent = 'Could not load ' + els.mipFileName.value.trim() + ': ' + e.message;
-    mipRows = [];
-  }
-  try {
-    absRows = await parseCSV(els.absFileName.value.trim());
-    els.status.textContent += ' + ' + els.absFileName.value.trim();
-  } catch { absRows = []; }
+  try { mipRows = await parseCSV(els.mipFileName.value.trim()); els.status.textContent = 'Loaded ' + els.mipFileName.value.trim(); }
+  catch(e) { els.status.textContent = 'Could not load ' + els.mipFileName.value.trim() + ': ' + e.message; mipRows = []; }
+  try { absRows = await parseCSV(els.absFileName.value.trim()); els.status.textContent += ' + ' + els.absFileName.value.trim(); }
+  catch { absRows = []; }
 
   if (!mipRows.length) return;
 
@@ -202,7 +200,6 @@ async function loadCSVs() {
     date:  findCol(mipRows, ['date','activity date','session date','day']) || allCols.find(c=>/date|day/i.test(c)) || allCols[0],
   };
 
-  // populate selects
   const fill = (sel, allowEmpty=false) => {
     sel.innerHTML = allowEmpty ? '<option value="">(none)</option>' : '';
     for (const c of allCols) sel.innerHTML += `<option value="${esc(c)}">${esc(c)}</option>`;
@@ -215,13 +212,13 @@ async function loadCSVs() {
   els.dateCol.value = guesses.date;
 }
 
-// ---- build calendar ----
+// ===== Build calendar =====
 function buildCalendar() {
   const nameCol = els.nameCol.value;
   const subjCol = els.subjCol.value || null;
   const mipCol  = els.mipCol.value;
   const dateCol = els.dateCol.value;
-  const fmt     = els.dateFmt.value; // default preselected to DD/MM/YY
+  const fmt     = els.dateFmt.value;
 
   if (!mipRows.length) { els.status.textContent = 'Load CSVs first.'; return; }
 
@@ -240,15 +237,12 @@ function buildCalendar() {
   // tooltips from E..J and M
   const mkTip = (r) => {
     const parts = [];
-    for (const idx of [4,5,6,7,8,9,12]) {
-      const k = allCols[idx]; if (k) parts.push(`${k}: ${r._raw[k] ?? ''}`);
-    }
+    for (const idx of HOVER_INDICES) { const k = allCols[idx]; if (k) parts.push(`${k}: ${r._raw[k] ?? ''}`); }
     return parts.join('\n');
   };
 
   // keep last per (__row,__date)
-  const map = new Map();
-  rows.forEach(r => map.set(r.__row + '|' + r.__date, r));
+  const map = new Map(); rows.forEach(r => map.set(r.__row + '|' + r.__date, r));
   const dedup = Array.from(map.values());
 
   // absences
@@ -263,12 +257,8 @@ function buildCalendar() {
       const flag = aFlag ? String(r[aFlag]||'').trim().toLowerCase() : 'absent';
       const isAbsent = ['absent','a','true','1','yes'].includes(flag) || (aFlag==null);
       if (!iso || !isAbsent) return;
-      if (aSubj) {
-        const key = JSON.stringify([String(r[aName]||''), String(r[aSubj]||'')]);
-        absPairs.add(JSON.stringify([key, iso]));
-      } else {
-        absNameDate.add(JSON.stringify([String(r[aName]||''), iso]));
-      }
+      if (aSubj) { const key = JSON.stringify([String(r[aName]||''), String(r[aSubj]||'')]); absPairs.add(JSON.stringify([key, iso])); }
+      else { absNameDate.add(JSON.stringify([String(r[aName]||''), iso])); }
     });
   }
 
@@ -289,19 +279,41 @@ function buildCalendar() {
   dates.forEach(d => { const th=document.createElement('th'); th.textContent=d; trh.appendChild(th); });
   els.thead.appendChild(trh);
 
-  // rows
+  // rows + NEW: student separators
   els.tbody.innerHTML = '';
   const subjects = new Set();
-  rowKeys.forEach(rowKey => {
+  let prevName = null;
+
+  rowKeys.forEach((rowKey, idx) => {
     let name = rowKey, subject = '';
     try { const a=JSON.parse(rowKey); name=a[0]; subject=a[1]||''; } catch {}
     if (subject) subjects.add(subject);
 
+    // optional spacer row between different students
+    if (USE_STUDENT_GAP && prevName !== null && name !== prevName) {
+      const gap = document.createElement('tr');
+      gap.className = 'student-gap';
+      const td = document.createElement('td');
+      td.colSpan = 2 + dates.length; // Name + Subject + dates
+      gap.appendChild(td);
+      els.tbody.appendChild(gap);
+    }
+
     const tr = document.createElement('tr');
     tr.setAttribute('data-subject', subject || '');
 
-    const th1 = document.createElement('th'); th1.style.position='sticky'; th1.style.left='0'; th1.style.background='#fff'; th1.style.zIndex='2'; th1.style.textAlign='left'; th1.style.whiteSpace='nowrap'; th1.textContent = name || '';
-    const th2 = document.createElement('th'); th2.style.position='sticky'; th2.style.left='120px'; th2.style.background='#fff'; th2.style.zIndex='2'; th2.style.textAlign='left'; th2.style.whiteSpace='nowrap'; th2.textContent = subject || '';
+    // bold divider before a NEW student (except the very first)
+    if (prevName !== null && name !== prevName) tr.classList.add('student-sep');
+    prevName = name;
+
+    const th1 = document.createElement('th');
+    th1.style.position='sticky'; th1.style.left='0'; th1.style.background='#fff'; th1.style.zIndex='2';
+    th1.style.textAlign='left'; th1.style.whiteSpace='nowrap'; th1.textContent = name || '';
+
+    const th2 = document.createElement('th');
+    th2.style.position='sticky'; th2.style.left='120px'; th2.style.background='#fff'; th2.style.zIndex='2';
+    th2.style.textAlign='left'; th2.style.whiteSpace='nowrap'; th2.textContent = subject || '';
+
     tr.append(th1, th2);
 
     dates.forEach(d => {
@@ -309,8 +321,7 @@ function buildCalendar() {
       td.style.textAlign='center'; td.style.minWidth='90px'; td.style.padding='6px 8px'; td.style.border='1px solid #eee';
       const k = rowKey + '|' + d;
       const tip = tipMap.get(k); if (tip) td.title = tip;
-      const baseName = name || '';
-      const isAbsent = absPairs.has(JSON.stringify([rowKey, d])) || absNameDate.has(JSON.stringify([baseName, d]));
+      const isAbsent = absPairs.has(JSON.stringify([rowKey, d])) || absNameDate.has(JSON.stringify([name || '', d]));
       if (isAbsent) { td.style.background = COLOR.absent; td.textContent = 'Absent'; }
       else { const v = valMap.get(k); td.style.background = statusColor(v); td.textContent = (v==null ? '' : String(v)); }
       tr.appendChild(td);
