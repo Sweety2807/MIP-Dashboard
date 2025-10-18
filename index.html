@@ -23,12 +23,17 @@
     select,input[type="text"]{padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px}
     button{padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;cursor:pointer}
 
-    /* === Solid full-width separator between students === */
-    tbody tr.student-divider td {
-      padding: 0 !important;
+    /* --- NEW: student separators --- */
+    /* Thick separator line before each new student's first row */
+    tbody tr.student-sep th,
+    tbody tr.student-sep td {
+      border-top: 3px solid #94a3b8; /* slate-400 */
+    }
+    /* Optional spacer row (blank line) between students */
+    tbody tr.student-gap td {
+      padding: 4px 0 !important;
       border: none !important;
-      height: 6px;             /* thickness of the bar */
-      background: #94a3b8;     /* slate-400 solid bar */
+      background: transparent !important;
     }
   </style>
 </head>
@@ -60,10 +65,22 @@
       <button id="reload">Load CSVs</button>
     </div>
     <div class="row" style="margin-top:10px">
-      <div><label>Name column:</label><select id="nameCol"></select></div>
-      <div><label>Subject column:</label><select id="subjCol"></select></div>
-      <div><label>MIP column:</label><select id="mipCol"></select></div>
-      <div><label>Date column:</label><select id="dateCol"></select></div>
+      <div>
+        <label>Name column:</label>
+        <select id="nameCol"></select>
+      </div>
+      <div>
+        <label>Subject column:</label>
+        <select id="subjCol"></select>
+      </div>
+      <div>
+        <label>MIP column:</label>
+        <select id="mipCol"></select>
+      </div>
+      <div>
+        <label>Date column:</label>
+        <select id="dateCol"></select>
+      </div>
       <div>
         <label>Date format:</label>
         <select id="dateFmt">
@@ -97,85 +114,263 @@
 <script>
 dayjs.extend(dayjs_plugin_customParseFormat);
 
-const COLOR = { onTrack:'#A5D6A7', spendMore:'#FFF59D', red:'#EF9A9A', absent:'#CFD8DC', none:'#EEEEEE' };
+// ===== Config =====
 const HOVER_INDICES = [4,5,6,7,8,9,12]; // E..J & M
+const COLOR = { onTrack:'#A5D6A7', spendMore:'#FFF59D', red:'#EF9A9A', absent:'#CFD8DC', none:'#EEEEEE' };
+const USE_STUDENT_GAP = false; // set to true if you also want a blank gap row between students
 
-let mipRows = [], absRows = [], allCols = [];
+// ===== State & Elements =====
+let mipRows = [], absRows = [];
+let allCols = [];
 const els = {
-  nameCol:document.getElementById('nameCol'), subjCol:document.getElementById('subjCol'),
-  mipCol:document.getElementById('mipCol'),   dateCol:document.getElementById('dateCol'),
-  dateFmt:document.getElementById('dateFmt'), thead:document.getElementById('thead'),
-  tbody:document.getElementById('tbody'),     q:document.getElementById('q'),
-  status:document.getElementById('status'),   subjects:document.getElementById('subjects'),
-  mipFileName:document.getElementById('mipFileName'), absFileName:document.getElementById('absFileName')
+  nameCol: document.getElementById('nameCol'),
+  subjCol: document.getElementById('subjCol'),
+  mipCol:  document.getElementById('mipCol'),
+  dateCol: document.getElementById('dateCol'),
+  dateFmt: document.getElementById('dateFmt'),
+  thead:   document.getElementById('thead'),
+  tbody:   document.getElementById('tbody'),
+  q:       document.getElementById('q'),
+  status:  document.getElementById('status'),
+  subjects:document.getElementById('subjects'),
+  mipFileName: document.getElementById('mipFileName'),
+  absFileName: document.getElementById('absFileName'),
 };
 
-/* ---------- CSV loader (fixed) ---------- */
+// ===== Helpers =====
 const parseCSV = async (url) => {
-  const res = await fetch(url, { cache: 'no-store' });
+  const res = await fetch(url, {cache:'no-store'});
   if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
   const text = await res.text();
   return new Promise((resolve, reject) => {
-    Papa.parse(text, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (result) => resolve(result.data),
-      error: reject
-    });
+    Papa.parse(text, {header:true, skipEmptyLines:true, complete: r=>resolve(r.data), error: reject});
   });
 };
 
 const findCol = (rows, candidates) => {
   if (!rows.length) return null;
   const cols = Object.keys(rows[0]);
-  for (const cand of candidates) {
-    const hit = cols.find(c => c.toLowerCase() === cand.toLowerCase());
-    if (hit) return hit;
-  }
-  for (const cand of candidates) {
-    const hit = cols.find(c => c.toLowerCase().includes(cand.toLowerCase()));
-    if (hit) return hit;
-  }
+  for (const cand of candidates) { const hit = cols.find(c => c.toLowerCase() === cand.toLowerCase()); if (hit) return hit; }
+  for (const cand of candidates) { const hit = cols.find(c => c.toLowerCase().includes(cand.toLowerCase())); if (hit) return hit; }
   return null;
 };
 
 const toISODate = (v, fmt) => {
   if (!v) return null;
-  if (fmt && fmt !== 'auto') {
-    const d = dayjs(v, fmt, true);
-    return d.isValid() ? d.format('YYYY-MM-DD') : null;
-  }
-  // auto: common 4-digit + 2-digit patterns
+  if (fmt && fmt !== 'auto') { const d = dayjs(v, fmt, true); return d.isValid() ? d.format('YYYY-MM-DD') : null; }
+  // auto: common 4-digit + 2-digit year patterns
   let d = dayjs(v);
-  if (!d.isValid()) d = dayjs(v, 'DD/MM/YY', true);
+  if (!d.isValid()) d = dayjs(v, 'YYYY-MM-DD', true);
   if (!d.isValid()) d = dayjs(v, 'DD/MM/YYYY', true);
   if (!d.isValid()) d = dayjs(v, 'MM/DD/YYYY', true);
-  if (!d.isValid()) d = dayjs(v, 'YYYY-MM-DD', true);
   if (!d.isValid()) d = dayjs(v, 'DD-MM-YYYY', true);
   if (!d.isValid()) d = dayjs(v, 'YYYY/MM/DD', true);
+  if (!d.isValid()) d = dayjs(v, 'DD/MM/YY', true);
+  if (!d.isValid()) d = dayjs(v, 'MM/DD/YY', true);
+  if (!d.isValid()) d = dayjs(v, 'DD-MM-YY', true);
   return d.isValid() ? d.format('YYYY-MM-DD') : null;
 };
 
 const statusColor = (val) => {
   if (val == null || val === "") return COLOR.none;
   const s = String(val).trim().toLowerCase();
-  if (s.includes("on track")) return COLOR.onTrack;
-  if (s.includes("spend more")) return COLOR.spendMore;
-  if (s.includes("low efficiency") || s.includes("probable") || s.includes("idling") || s.includes("inflated")) return COLOR.red;
+  if (s === "on track") return COLOR.onTrack;
+  if (s === "spend more time") return COLOR.spendMore;
+  if (s === "probable idling/inflated time" || s.includes("low efficiency") || s.includes("idling") || s.includes("inflated")) return COLOR.red;
   return COLOR.none;
 };
 
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
-/* ---------- Load CSVs & guess columns ---------- */
+// ===== Load CSVs & guess columns =====
 async function loadCSVs() {
   els.status.textContent = 'Loading...';
   try { mipRows = await parseCSV(els.mipFileName.value.trim()); els.status.textContent = 'Loaded ' + els.mipFileName.value.trim(); }
-  catch (e) { els.status.textContent = 'Could not load ' + els.mipFileName.value.trim(); mipRows = []; }
-
+  catch(e) { els.status.textContent = 'Could not load ' + els.mipFileName.value.trim() + ': ' + e.message; mipRows = []; }
   try { absRows = await parseCSV(els.absFileName.value.trim()); els.status.textContent += ' + ' + els.absFileName.value.trim(); }
   catch { absRows = []; }
 
   if (!mipRows.length) return;
 
   allCols = Object.keys(mipRows[0]);
+  const guesses = {
+    name:  findCol(mipRows, ['name','student name','learner','child']) || allCols[0],
+    subj:  findCol(mipRows, ['subject','course','class']) || '',
+    mip:   findCol(mipRows, ['mip','status','progress','metric']) || allCols[0],
+    date:  findCol(mipRows, ['date','activity date','session date','day']) || allCols.find(c=>/date|day/i.test(c)) || allCols[0],
+  };
+
+  const fill = (sel, allowEmpty=false) => {
+    sel.innerHTML = allowEmpty ? '<option value="">(none)</option>' : '';
+    for (const c of allCols) sel.innerHTML += `<option value="${esc(c)}">${esc(c)}</option>`;
+  };
+  fill(els.nameCol); fill(els.subjCol, true); fill(els.mipCol); fill(els.dateCol);
+
+  els.nameCol.value = guesses.name;
+  els.subjCol.value = guesses.subj;
+  els.mipCol.value  = guesses.mip;
+  els.dateCol.value = guesses.date;
+}
+
+// ===== Build calendar =====
+function buildCalendar() {
+  const nameCol = els.nameCol.value;
+  const subjCol = els.subjCol.value || null;
+  const mipCol  = els.mipCol.value;
+  const dateCol = els.dateCol.value;
+  const fmt     = els.dateFmt.value;
+
+  if (!mipRows.length) { els.status.textContent = 'Load CSVs first.'; return; }
+
+  // Normalize dates & build keys
+  const rows = mipRows
+    .map(r => {
+      const iso = toISODate(r[dateCol], fmt);
+      if (!iso) return null;
+      const rowKey = subjCol ? JSON.stringify([String(r[nameCol]||''), String(r[subjCol]||'')]) : String(r[nameCol]||'');
+      return { __date: iso, __row: rowKey, __name: String(r[nameCol]||''), __subj: subjCol ? String(r[subjCol]||'') : '', __mip: r[mipCol], _raw: r };
+    })
+    .filter(Boolean);
+
+  if (!rows.length) { els.status.textContent = 'No valid dates after parsing. Check Date column/format.'; return; }
+
+  // tooltips from E..J and M
+  const mkTip = (r) => {
+    const parts = [];
+    for (const idx of HOVER_INDICES) { const k = allCols[idx]; if (k) parts.push(`${k}: ${r._raw[k] ?? ''}`); }
+    return parts.join('\n');
+  };
+
+  // keep last per (__row,__date)
+  const map = new Map(); rows.forEach(r => map.set(r.__row + '|' + r.__date, r));
+  const dedup = Array.from(map.values());
+
+  // absences
+  const absPairs = new Set(), absNameDate = new Set();
+  if (absRows.length) {
+    const aName = findCol(absRows, [els.nameCol.value,'name','student name','learner','child']) || Object.keys(absRows[0])[0];
+    const aSubj = subjCol ? findCol(absRows, [els.subjCol.value,'subject','course','class']) : null;
+    const aDate = findCol(absRows, ['date','activity date','session date','day']) || els.dateCol.value;
+    const aFlag = findCol(absRows, ['absent','attendance','status']);
+    absRows.forEach(r => {
+      const iso = toISODate(r[aDate], fmt) || toISODate(r[aDate], 'auto');
+      const flag = aFlag ? String(r[aFlag]||'').trim().toLowerCase() : 'absent';
+      const isAbsent = ['absent','a','true','1','yes'].includes(flag) || (aFlag==null);
+      if (!iso || !isAbsent) return;
+      if (aSubj) { const key = JSON.stringify([String(r[aName]||''), String(r[aSubj]||'')]); absPairs.add(JSON.stringify([key, iso])); }
+      else { absNameDate.add(JSON.stringify([String(r[aName]||''), iso])); }
+    });
+  }
+
+  // row keys & dates
+  const rowKeys = Array.from(new Set(dedup.map(r => r.__row)));
+  const dates = Array.from(new Set(dedup.map(r => r.__date))).sort();
+
+  // maps
+  const valMap = new Map(), tipMap = new Map();
+  dedup.forEach(r => { const k=r.__row+'|'+r.__date; valMap.set(k, r.__mip); tipMap.set(k, mkTip(r)); });
+
+  // render header
+  els.thead.innerHTML = '';
+  const trh = document.createElement('tr');
+  const thN = document.createElement('th'); thN.style.position='sticky'; thN.style.left='0'; thN.style.background='#fafafa'; thN.style.zIndex='3'; thN.textContent='Name';
+  const thS = document.createElement('th'); thS.style.position='sticky'; thS.style.left='120px'; thS.style.background='#fafafa'; thS.style.zIndex='3'; thS.textContent='Subject';
+  trh.append(thN, thS);
+  dates.forEach(d => { const th=document.createElement('th'); th.textContent=d; trh.appendChild(th); });
+  els.thead.appendChild(trh);
+
+  // rows + NEW: student separators
+  els.tbody.innerHTML = '';
+  const subjects = new Set();
+  let prevName = null;
+
+  rowKeys.forEach((rowKey, idx) => {
+    let name = rowKey, subject = '';
+    try { const a=JSON.parse(rowKey); name=a[0]; subject=a[1]||''; } catch {}
+    if (subject) subjects.add(subject);
+
+    // optional spacer row between different students
+    if (USE_STUDENT_GAP && prevName !== null && name !== prevName) {
+      const gap = document.createElement('tr');
+      gap.className = 'student-gap';
+      const td = document.createElement('td');
+      td.colSpan = 2 + dates.length; // Name + Subject + dates
+      gap.appendChild(td);
+      els.tbody.appendChild(gap);
+    }
+
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-subject', subject || '');
+
+    // bold divider before a NEW student (except the very first)
+    if (prevName !== null && name !== prevName) tr.classList.add('student-sep');
+    prevName = name;
+
+    const th1 = document.createElement('th');
+    th1.style.position='sticky'; th1.style.left='0'; th1.style.background='#fff'; th1.style.zIndex='2';
+    th1.style.textAlign='left'; th1.style.whiteSpace='nowrap'; th1.textContent = name || '';
+
+    const th2 = document.createElement('th');
+    th2.style.position='sticky'; th2.style.left='120px'; th2.style.background='#fff'; th2.style.zIndex='2';
+    th2.style.textAlign='left'; th2.style.whiteSpace='nowrap'; th2.textContent = subject || '';
+
+    tr.append(th1, th2);
+
+    dates.forEach(d => {
+      const td = document.createElement('td');
+      td.style.textAlign='center'; td.style.minWidth='90px'; td.style.padding='6px 8px'; td.style.border='1px solid #eee';
+      const k = rowKey + '|' + d;
+      const tip = tipMap.get(k); if (tip) td.title = tip;
+      const isAbsent = absPairs.has(JSON.stringify([rowKey, d])) || absNameDate.has(JSON.stringify([name || '', d]));
+      if (isAbsent) { td.style.background = COLOR.absent; td.textContent = 'Absent'; }
+      else { const v = valMap.get(k); td.style.background = statusColor(v); td.textContent = (v==null ? '' : String(v)); }
+      tr.appendChild(td);
+    });
+
+    els.tbody.appendChild(tr);
+  });
+
+  // subject checkboxes
+  els.subjects.innerHTML = '';
+  const subjList = Array.from(subjects).sort();
+  if (subjList.length) {
+    const wrap = document.createElement('div'); wrap.style.marginTop='6px';
+    let htmlChecks = '<strong>Subjects:</strong> ';
+    subjList.forEach(s => { htmlChecks += `<label style="margin-right:12px;"><input type="checkbox" class="subj" value="${esc(s)}" checked/> ${esc(s)}</label>`; });
+    htmlChecks += `<button onclick="selectAllSubjects(true)" style="margin-left:8px;">Select All</button>`;
+    htmlChecks += `<button onclick="selectAllSubjects(false)" style="margin-left:6px;">Clear</button>`;
+    wrap.innerHTML = htmlChecks; els.subjects.appendChild(wrap);
+  }
+
+  // filtering
+  const filterRows = () => {
+    const q = (els.q.value || '').toLowerCase();
+    const trs = document.querySelectorAll('tbody tr');
+    const chk = document.querySelectorAll('input.subj');
+    const useSubj = chk.length > 0;
+    const sel = new Set(); chk.forEach(b => { if (b.checked) sel.add(b.value.toLowerCase()); });
+    trs.forEach(tr => {
+      const nameTxt = tr.children[0].textContent.toLowerCase();
+      const subjTxt = (tr.getAttribute('data-subject') || tr.children[1].textContent).toLowerCase();
+      const matchQ = !q || nameTxt.includes(q) || subjTxt.includes(q);
+      const matchS = !useSubj || sel.has(subjTxt) || subjTxt === '';
+      tr.style.display = (matchQ && matchS) ? '' : 'none';
+    });
+  };
+  window.selectAllSubjects = (state) => { document.querySelectorAll('input.subj').forEach(b => b.checked=state); filterRows(); };
+  els.q.oninput = filterRows;
+  document.addEventListener('change', e => { if (e.target && e.target.classList.contains('subj')) filterRows(); });
+  filterRows();
+
+  els.status.textContent = `Built ${dates.length} date columns · ${rowKeys.length} rows`;
+}
+
+// wire up
+document.getElementById('reload').onclick = loadCSVs;
+document.getElementById('build').onclick   = buildCalendar;
+
+// auto-load on first visit
+loadCSVs();
+</script>
+</body>
+</html>
