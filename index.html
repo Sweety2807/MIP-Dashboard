@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <title>📅 MIP Calendar</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- CSV + date parsing libs -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/customParseFormat.js"></script>
@@ -26,8 +27,8 @@
     tbody tr.student-divider td {
       padding: 0 !important;
       border: none !important;
-      height: 6px;             /* thickness */
-      background: #94a3b8;     /* slate gray solid bar */
+      height: 6px;             /* thickness of the bar */
+      background: #94a3b8;     /* slate-400 solid bar */
     }
   </style>
 </head>
@@ -46,7 +47,7 @@
   </div>
 
   <!-- Mapping panel -->
-   <div class="panel">
+  <div class="panel">
     <div class="row">
       <div>
         <label>MIP CSV:</label>
@@ -76,7 +77,7 @@
         </select>
       </div>
       <button id="build">Build Calendar</button>
-    </div> 
+    </div>
   </div>
 
   <div class="controls" style="margin:8px 0 12px 0;">
@@ -95,140 +96,86 @@
 
 <script>
 dayjs.extend(dayjs_plugin_customParseFormat);
+
 const COLOR = { onTrack:'#A5D6A7', spendMore:'#FFF59D', red:'#EF9A9A', absent:'#CFD8DC', none:'#EEEEEE' };
-const HOVER_INDICES = [4,5,6,7,8,9,12];
-let mipRows=[],absRows=[],allCols=[];
-const els={
-  nameCol:document.getElementById('nameCol'),subjCol:document.getElementById('subjCol'),
-  mipCol:document.getElementById('mipCol'),dateCol:document.getElementById('dateCol'),
-  dateFmt:document.getElementById('dateFmt'),thead:document.getElementById('thead'),
-  tbody:document.getElementById('tbody'),q:document.getElementById('q'),
-  status:document.getElementById('status'),subjects:document.getElementById('subjects'),
-  mipFileName:document.getElementById('mipFileName'),absFileName:document.getElementById('absFileName')
+const HOVER_INDICES = [4,5,6,7,8,9,12]; // E..J & M
+
+let mipRows = [], absRows = [], allCols = [];
+const els = {
+  nameCol:document.getElementById('nameCol'), subjCol:document.getElementById('subjCol'),
+  mipCol:document.getElementById('mipCol'),   dateCol:document.getElementById('dateCol'),
+  dateFmt:document.getElementById('dateFmt'), thead:document.getElementById('thead'),
+  tbody:document.getElementById('tbody'),     q:document.getElementById('q'),
+  status:document.getElementById('status'),   subjects:document.getElementById('subjects'),
+  mipFileName:document.getElementById('mipFileName'), absFileName:document.getElementById('absFileName')
 };
 
-const parseCSV=async(url)=>{const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error('fetch '+url);
-  return new Promise((res,rej)=>Papa.parse(await r.text(),{header:true,skipEmptyLines:true,complete:v=>res(v.data),error:rej}));
+/* ---------- CSV loader (fixed) ---------- */
+const parseCSV = async (url) => {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
+  const text = await res.text();
+  return new Promise((resolve, reject) => {
+    Papa.parse(text, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (result) => resolve(result.data),
+      error: reject
+    });
+  });
 };
-const findCol=(rows,cands)=>{if(!rows.length)return null;const cols=Object.keys(rows[0]);
-  for(const c of cands){const hit=cols.find(x=>x.toLowerCase()===c.toLowerCase());if(hit)return hit;}
-  for(const c of cands){const hit=cols.find(x=>x.toLowerCase().includes(c.toLowerCase()));if(hit)return hit;}return null;
+
+const findCol = (rows, candidates) => {
+  if (!rows.length) return null;
+  const cols = Object.keys(rows[0]);
+  for (const cand of candidates) {
+    const hit = cols.find(c => c.toLowerCase() === cand.toLowerCase());
+    if (hit) return hit;
+  }
+  for (const cand of candidates) {
+    const hit = cols.find(c => c.toLowerCase().includes(cand.toLowerCase()));
+    if (hit) return hit;
+  }
+  return null;
 };
-const toISODate=(v,f)=>{if(!v)return null;if(f&&f!=='auto'){const d=dayjs(v,f,true);return d.isValid()?d.format('YYYY-MM-DD'):null;}
-  let d=dayjs(v);if(!d.isValid())d=dayjs(v,'DD/MM/YY',true);if(!d.isValid())d=dayjs(v,'DD/MM/YYYY',true);
-  if(!d.isValid())d=dayjs(v,'MM/DD/YYYY',true);if(!d.isValid())d=dayjs(v,'YYYY-MM-DD',true);if(!d.isValid())d=dayjs(v,'DD-MM-YYYY',true);
-  if(!d.isValid())d=dayjs(v,'YYYY/MM/DD',true);return d.isValid()?d.format('YYYY-MM-DD'):null;
+
+const toISODate = (v, fmt) => {
+  if (!v) return null;
+  if (fmt && fmt !== 'auto') {
+    const d = dayjs(v, fmt, true);
+    return d.isValid() ? d.format('YYYY-MM-DD') : null;
+  }
+  // auto: common 4-digit + 2-digit patterns
+  let d = dayjs(v);
+  if (!d.isValid()) d = dayjs(v, 'DD/MM/YY', true);
+  if (!d.isValid()) d = dayjs(v, 'DD/MM/YYYY', true);
+  if (!d.isValid()) d = dayjs(v, 'MM/DD/YYYY', true);
+  if (!d.isValid()) d = dayjs(v, 'YYYY-MM-DD', true);
+  if (!d.isValid()) d = dayjs(v, 'DD-MM-YYYY', true);
+  if (!d.isValid()) d = dayjs(v, 'YYYY/MM/DD', true);
+  return d.isValid() ? d.format('YYYY-MM-DD') : null;
 };
-const statusColor=v=>{
-  if(!v)return COLOR.none;
-  const s=String(v).toLowerCase();
-  if(s.includes('on track'))return COLOR.onTrack;
-  if(s.includes('spend'))return COLOR.spendMore;
-  if(s.includes('low efficiency')||s.includes('probable')||s.includes('idling')||s.includes('inflated'))return COLOR.red;
+
+const statusColor = (val) => {
+  if (val == null || val === "") return COLOR.none;
+  const s = String(val).trim().toLowerCase();
+  if (s.includes("on track")) return COLOR.onTrack;
+  if (s.includes("spend more")) return COLOR.spendMore;
+  if (s.includes("low efficiency") || s.includes("probable") || s.includes("idling") || s.includes("inflated")) return COLOR.red;
   return COLOR.none;
 };
-const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-async function loadCSVs(){
-  els.status.textContent='Loading...';
-  try{mipRows=await parseCSV(els.mipFileName.value.trim());els.status.textContent='Loaded MIP';}catch(e){els.status.textContent='MIP load fail';}
-  try{absRows=await parseCSV(els.absFileName.value.trim());}catch{absRows=[];}
-  if(!mipRows.length)return;
-  allCols=Object.keys(mipRows[0]);
-  const guess={name:findCol(mipRows,['name','student']),subj:findCol(mipRows,['subject','class']),
-    mip:findCol(mipRows,['mip','status']),date:findCol(mipRows,['date','day'])};
-  const fill=(sel,allowEmpty=false)=>{sel.innerHTML=allowEmpty?'<option value="">(none)</option>':'';for(const c of allCols)sel.innerHTML+=`<option value="${esc(c)}">${esc(c)}</option>`};
-  fill(els.nameCol);fill(els.subjCol,true);fill(els.mipCol);fill(els.dateCol);
-  els.nameCol.value=guess.name;els.subjCol.value=guess.subj;els.mipCol.value=guess.mip;els.dateCol.value=guess.date;
-}
-function buildCalendar(){
-  const nameCol=els.nameCol.value,subjCol=els.subjCol.value||null,mipCol=els.mipCol.value,dateCol=els.dateCol.value,fmt=els.dateFmt.value;
-  if(!mipRows.length){els.status.textContent='Load CSVs first';return;}
-  const rows=mipRows.map(r=>{const iso=toISODate(r[dateCol],fmt);if(!iso)return null;
-    const key=subjCol?JSON.stringify([r[nameCol],r[subjCol]]):r[nameCol];
-    return{__date:iso,__row:key,__name:r[nameCol],__subj:subjCol?r[subjCol]:'',__mip:r[mipCol],_raw:r};}).filter(Boolean);
-  if(!rows.length){els.status.textContent='No valid dates';return;}
-  const map=new Map();rows.forEach(r=>map.set(r.__row+'|'+r.__date,r));
-  const dedup=Array.from(map.values());
-  const absPairs=new Set(),absNameDate=new Set();
-  if(absRows.length){const aName=findCol(absRows,[els.nameCol.value,'name'])||Object.keys(absRows[0])[0];
-    const aSubj=subjCol?findCol(absRows,[els.subjCol.value,'subject']):null;
-    const aDate=findCol(absRows,['date'])||els.dateCol.value;
-    absRows.forEach(r=>{const iso=toISODate(r[aDate],fmt)||toISODate(r[aDate],'auto');
-      const flag=String(r.absent||r.status||'absent').toLowerCase();
-      const absent=['absent','a','1','true','yes'].includes(flag);
-      if(!iso||!absent)return;
-      if(aSubj){const k=JSON.stringify([r[aName],r[aSubj]]);absPairs.add(JSON.stringify([k,iso]));}
-      else absNameDate.add(JSON.stringify([r[aName],iso]));
-    });
-  }
-  const rowKeys=Array.from(new Set(dedup.map(r=>r.__row)));
-  const dates=Array.from(new Set(dedup.map(r=>r.__date))).sort();
-  const valMap=new Map(),tipMap=new Map();
-  dedup.forEach(r=>{const k=r.__row+'|'+r.__date;valMap.set(k,r.__mip);
-    const t=HOVER_INDICES.map(i=>allCols[i]?`${allCols[i]}: ${r._raw[allCols[i]]??''}`:'').join('\n');tipMap.set(k,t);});
-  els.thead.innerHTML='';const trh=document.createElement('tr');
-  trh.innerHTML=`<th style="position:sticky;left:0;background:#fafafa;z-index:3;">Name</th>
-                 <th style="position:sticky;left:120px;background:#fafafa;z-index:3;">Subject</th>`+
-                 dates.map(d=>`<th>${d}</th>`).join('');
-  els.thead.appendChild(trh);
-  els.tbody.innerHTML='';const subjects=new Set();let prevName=null;
-  rowKeys.forEach(rk=>{
-    let name=rk,subject='';try{const a=JSON.parse(rk);name=a[0];subject=a[1]||'';}catch{}
-    if(subject)subjects.add(subject);
-    if(prevName!==null&&name!==prevName){ // divider row
-      const div=document.createElement('tr');
-      div.className='student-divider';
-      const td=document.createElement('td');
-      td.colSpan=2+dates.length;
-      div.appendChild(td);
-      els.tbody.appendChild(div);
-    }
-    prevName=name;
-    const tr=document.createElement('tr');
-    tr.setAttribute('data-subject',subject||'');
-    const th1=document.createElement('th');th1.style.position='sticky';th1.style.left='0';th1.style.background='#fff';th1.textContent=name;
-    const th2=document.createElement('th');th2.style.position='sticky';th2.style.left='120px';th2.style.background='#fff';th2.textContent=subject;
-    tr.append(th1,th2);
-    dates.forEach(d=>{
-      const td=document.createElement('td');
-      td.style.textAlign='center';td.style.minWidth='90px';td.style.padding='6px 8px';
-      const k=rk+'|'+d;
-      const tip=tipMap.get(k);if(tip)td.title=tip;
-      const isAbs=absPairs.has(JSON.stringify([rk,d]))||absNameDate.has(JSON.stringify([name,d]));
-      if(isAbs){td.style.background=COLOR.absent;td.textContent='Absent';}
-      else{const v=valMap.get(k);td.style.background=statusColor(v);td.textContent=v||'';}
-      tr.appendChild(td);
-    });
-    els.tbody.appendChild(tr);
-  });
-  // subject filters
-  els.subjects.innerHTML='';
-  const subjList=Array.from(subjects).sort();
-  if(subjList.length){
-    const wrap=document.createElement('div');wrap.style.marginTop='6px';
-    wrap.innerHTML='<strong>Subjects:</strong> '+subjList.map(s=>`<label style="margin-right:12px;"><input type="checkbox" class="subj" value="${esc(s)}" checked/> ${esc(s)}</label>`).join('')+
-      `<button onclick="selectAllSubjects(true)" style="margin-left:8px;">Select All</button>
-       <button onclick="selectAllSubjects(false)" style="margin-left:6px;">Clear</button>`;
-    els.subjects.appendChild(wrap);
-  }
-  const filter=()=>{const q=(els.q.value||'').toLowerCase();
-    const chk=document.querySelectorAll('input.subj');const sel=new Set();
-    chk.forEach(b=>{if(b.checked)sel.add(b.value.toLowerCase());});
-    document.querySelectorAll('tbody tr').forEach(tr=>{
-      if(tr.classList.contains('student-divider'))return;
-      const n=tr.children[0].textContent.toLowerCase();
-      const s=(tr.getAttribute('data-subject')||'').toLowerCase();
-      const show=( (!q||n.includes(q)||s.includes(q)) && (sel.has(s)||s==='') );
-      tr.style.display=show?'':'none';
-    });
-  };
-  window.selectAllSubjects=s=>{document.querySelectorAll('input.subj').forEach(b=>b.checked=s);filter();};
-  els.q.oninput=filter;document.addEventListener('change',e=>{if(e.target.classList.contains('subj'))filter();});
-  els.status.textContent=`Built ${dates.length} date columns · ${rowKeys.length} rows`;
-}
-document.getElementById('reload').onclick=loadCSVs;
-document.getElementById('build').onclick=buildCalendar;
-loadCSVs();
-</script>
-</body>
-</html>
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+/* ---------- Load CSVs & guess columns ---------- */
+async function loadCSVs() {
+  els.status.textContent = 'Loading...';
+  try { mipRows = await parseCSV(els.mipFileName.value.trim()); els.status.textContent = 'Loaded ' + els.mipFileName.value.trim(); }
+  catch (e) { els.status.textContent = 'Could not load ' + els.mipFileName.value.trim(); mipRows = []; }
+
+  try { absRows = await parseCSV(els.absFileName.value.trim()); els.status.textContent += ' + ' + els.absFileName.value.trim(); }
+  catch { absRows = []; }
+
+  if (!mipRows.length) return;
+
+  allCols = Object.keys(mipRows[0]);
