@@ -1,4 +1,5 @@
 name	email	date	subject	Apps	Accuracy (%)	XP Earned	Active Minutes	Inactive Minutes	Waste Minutes	Min/XP	MIP	Notes
+					0.00%	0	0	0	0.00		Spend More Time	
 Aiden Richardson	aiden.richardson@alpha.school	13/10/25	Language	Lalilo	0.8203125	26	31	0	0	1.19	On Track	
 Aiden Richardson	aiden.richardson@alpha.school	13/10/25	Math	Zearn	1	14	29.9493	0	0	2.14	Low Efficiency	
 Aiden Richardson	aiden.richardson@alpha.school	13/10/25	Reading	Amplify	0.918032787	49	25.2496	0	0	0.52	On Track	
@@ -80,9 +81,9 @@ Callum Carson-Alford	callum.carsonalford@alpha.school	14/10/25	Math	Zearn	0	0	20
 Callum Carson-Alford	callum.carsonalford@alpha.school	14/10/25	Reading	Anton	1	45	43.0989	0	0	0.96	On Track	
 Callum Carson-Alford	callum.carsonalford@alpha.school	15/10/25	Language	Lalilo	0.981818182	65	14	0	0	0.22	On Track	
 Callum Carson-Alford	callum.carsonalford@alpha.school	15/10/25	Math	Zearn	1	42	46.9489	0	0	1.12	On Track	
-Callum Carson-Alford	callum.carsonalford@alpha.school	15/10/25	Reading	Amplify, Anton	1.875	44	30.1162	0	0	0.68	On Track	
+Callum Carson-Alford	callum.carsonalford@alpha.school	15/10/25	Reading	Amplify- Anton	1.875	44	30.1162	0	0	0.68	On Track	
 Callum Carson-Alford	callum.carsonalford@alpha.school	16/10/25	Language	Lalilo	0.884615385	26	31	0	0	1.19	On Track	
-Callum Carson-Alford	callum.carsonalford@alpha.school	16/10/25	Math	Synthesis Tutor, Zearn	1.727272727	36	43.0158	0	0	1.19	On Track	
+Callum Carson-Alford	callum.carsonalford@alpha.school	16/10/25	Math	Synthesis Tutor- Zearn	1.727272727	36	43.0158	0	0	1.19	On Track	
 Callum Carson-Alford	callum.carsonalford@alpha.school	16/10/25	Reading	Amplify	0.962962963	49	16.7998	0	0	0.34	On Track	
 Diego Bash	diego.bash@alpha.school	15/10/25	Language	Lalilo	0.824175824	26	6	0	0	0.23	On Track	
 Diego Bash	diego.bash@alpha.school	15/10/25	Math	Zearn	1	28	53.6655	0	0	1.92	Probable Idling/Inflated Time	
@@ -107,7 +108,7 @@ Ella Clark	ella.clark@alpha.school	14/10/25	Language	Lalilo	0.865853659	39	15	0	
 Ella Clark	ella.clark@alpha.school	14/10/25	Math	Freckle	0.916666667	25	14.9665	0	0	0.6	On Track	
 Ella Clark	ella.clark@alpha.school	14/10/25	Reading	Amplify	0.93902439	42	14.4497	0	0	0.34	On Track	
 Ella Clark	ella.clark@alpha.school	16/10/25	Language	Lalilo	0.93220339	39	27	0	0	0.69	On Track	
-Ella Clark	ella.clark@alpha.school	16/10/25	Math	Freckle, Zearn	1.714285714	41	44.0824	0	0	1.08	On Track	
+Ella Clark	ella.clark@alpha.school	16/10/25	Math	Freckle- Zearn	1.714285714	41	44.0824	0	0	1.08	On Track	
 Ella Clark	ella.clark@alpha.school	16/10/25	Reading	Amplify	0.928571429	28	11.2831	0	0	0.4	On Track	
 Elle Paul	eleanor.paul@alpha.school	13/10/25	Language	Lalilo	1	52	0	0	0	0	On Track	
 Elle Paul	eleanor.paul@alpha.school	13/10/25	Math	Zearn	1	84	0	0	0	0	On Track	
@@ -150,21 +151,21 @@ Eric Feltoon	eric.feltoon@alpha.school	14/10/25	Math	Freckle	0.925	20	10.9832	0	
 Eric Feltoon	eric.feltoon@alpha.school	14/10/25	Reading	Amplify	0.929824561	21	18.6999	0	0	0.89	Spend More Time	
 Eric Feltoon	eric.feltoon@alpha.school	15/10/25	Language	Lalilo	0.901639344	39	29	0	0	0.74	On Track	
 Eric Feltoon	eric.feltoon@alpha.school	15/10/25	Reading	Amplify	0.916666667	56	23.833	0	0	0.43	On Track	
-Eric Feltoon	eric.feltoon@alpha.school	16/10/25	FastMath	AlphaMath Fluency, Fast Math	0.93442623	6.47	5.9663	0	0.2832	0.92	Spend More Time	
+Eric Feltoon	eric.feltoon@alpha.school	16/10/25	FastMath	AlphaMath Fluency- Fast Math	0.93442623	6.47	5.9663	0	0.2832	0.92	Spend More Time	
 Eric Feltoon	eric.feltoon@alpha.school	16/10/25	Language	Lalilo	0.956521739	26	13	0	0	0.5	On Track	
 Eric Feltoon	eric.feltoon@alpha.school	16/10/25	Math	Zearn	1	48	30.1491	0	0	0.63	On Track	
 Eric Feltoon	eric.feltoon@alpha.school	16/10/25	Reading	Amplify	0.86259542	49	25.9495	0	0	0.53	On Track	
-Ferran Reddy	ferran.eashan.reddy@alpha.school	13/10/25	FastMath	AlphaMath Fluency, Fast Math	0.722222222	0.31	2.5499	0	53.8833	8.23	Spend More Time	
+Ferran Reddy	ferran.eashan.reddy@alpha.school	13/10/25	FastMath	AlphaMath Fluency- Fast Math	0.722222222	0.31	2.5499	0	53.8833	8.23	Spend More Time	
 Ferran Reddy	ferran.eashan.reddy@alpha.school	13/10/25	Language	AlphaLearn	0.8	45	0	0	0	0	On Track	
 Ferran Reddy	ferran.eashan.reddy@alpha.school	13/10/25	Math	AlphaLearn	0.5	0	0	0	0		Spend More Time	
 Ferran Reddy	ferran.eashan.reddy@alpha.school	13/10/25	Reading	AlphaLearn	0.7	0	0	0	0		Spend More Time	
 Ferran Reddy	ferran.eashan.reddy@alpha.school	14/10/25	Language	Lalilo	0.80952381	13	29	0	0	2.23	Low Efficiency	
 Ferran Reddy	ferran.eashan.reddy@alpha.school	14/10/25	Reading	Amplify	0.868421053	70	19.1996	0	0	0.27	On Track	
-Ferran Reddy	ferran.eashan.reddy@alpha.school	15/10/25	FastMath	AlphaMath Fluency, Fast Math	0.916666667	2.99	2.9833	0	5.9999	1	Spend More Time	
+Ferran Reddy	ferran.eashan.reddy@alpha.school	15/10/25	FastMath	AlphaMath Fluency- Fast Math	0.916666667	2.99	2.9833	0	5.9999	1	Spend More Time	
 Ferran Reddy	ferran.eashan.reddy@alpha.school	15/10/25	Language	Lalilo	0.95	39	25	0	0	0.64	On Track	
 Ferran Reddy	ferran.eashan.reddy@alpha.school	15/10/25	Math	Zearn	1	36	43.4655	0	0	1.21	Probable Idling/Inflated Time	
 Ferran Reddy	ferran.eashan.reddy@alpha.school	15/10/25	Reading	Amplify	0.869565217	35	28.433	0	0	0.81	On Track	
-Ferran Reddy	ferran.eashan.reddy@alpha.school	16/10/25	FastMath	AlphaMath Fluency, Fast Math	0.703703704	2.25	4.5666	0	14.4832	2.03	Spend More Time	
+Ferran Reddy	ferran.eashan.reddy@alpha.school	16/10/25	FastMath	AlphaMath Fluency- Fast Math	0.703703704	2.25	4.5666	0	14.4832	2.03	Spend More Time	
 Ferran Reddy	ferran.eashan.reddy@alpha.school	16/10/25	Language	Lalilo	0.875	26	26	0	0	1	On Track	
 Ferran Reddy	ferran.eashan.reddy@alpha.school	16/10/25	Math	Zearn	1	36	23.4994	0	0	0.65	On Track	
 Ferran Reddy	ferran.eashan.reddy@alpha.school	16/10/25	Reading	Amplify	0.8125	35	15.2165	0	0	0.43	On Track	
@@ -226,7 +227,7 @@ Leila Abony	leila.abony@alpha.school	15/10/25	Language	Lalilo	0.837209302	39	17	
 Leila Abony	leila.abony@alpha.school	15/10/25	Math	Freckle	0.76	15	25.7998	0	0	1.72	Low Efficiency	
 Leila Abony	leila.abony@alpha.school	15/10/25	Reading	Anton	1	39	9.9828	0	0	0.26	On Track	
 Leila Abony	leila.abony@alpha.school	16/10/25	Language	Lalilo	0.833333333	39	40	0	0	1.03	On Track	
-Leila Abony	leila.abony@alpha.school	16/10/25	Math	Freckle, Zearn	1.8	29	31.5655	0	0	1.09	On Track	
+Leila Abony	leila.abony@alpha.school	16/10/25	Math	Freckle- Zearn	1.8	29	31.5655	0	0	1.09	On Track	
 Leila Abony	leila.abony@alpha.school	16/10/25	Reading	Anton	0.971153846	36	12.1993	0	0	0.34	On Track	
 Leo Levy	leopold.levy@alpha.school	13/10/25	Language	Lalilo	0.789473684	26	30	0	0	1.15	On Track	
 Leo Levy	leopold.levy@alpha.school	13/10/25	Reading	Amplify	0.803571429	28	17.2498	0	0	0.62	On Track	
@@ -234,10 +235,10 @@ Leo Levy	leopold.levy@alpha.school	14/10/25	Language	Lalilo	0.911764706	39	14	0	
 Leo Levy	leopold.levy@alpha.school	14/10/25	Math	Freckle	0.96	25	12.4998	0	0	0.5	On Track	
 Leo Levy	leopold.levy@alpha.school	14/10/25	Reading	Amplify	0.93442623	28	13.4832	0	0	0.48	On Track	
 Leo Levy	leopold.levy@alpha.school	15/10/25	Language	Lalilo	0.6125	13	13	0	0	1	Spend More Time	
-Leo Levy	leopold.levy@alpha.school	15/10/25	Math	Freckle, Zearn	2	17	6.1663	0	0	0.36	Spend More Time	
+Leo Levy	leopold.levy@alpha.school	15/10/25	Math	Freckle- Zearn	2	17	6.1663	0	0	0.36	Spend More Time	
 Leo Levy	leopold.levy@alpha.school	15/10/25	Reading	Amplify	0.901408451	63	43.9666	0	0	0.7	On Track	
 Leo Levy	leopold.levy@alpha.school	16/10/25	Language	Lalilo	0.777777778	0	12	0	0		Low Efficiency and Spend More Time	
-Leo Levy	leopold.levy@alpha.school	16/10/25	Math	Mastery Track, MasteryTrack	0	45	5.85	0	0	0.13	On Track	
+Leo Levy	leopold.levy@alpha.school	16/10/25	Math	Mastery Track- MasteryTrack	0	45	5.85	0	0	0.13	On Track	
 Lila Dawson	lila.dawson@alpha.school	13/10/25	Language	Lalilo	0.842975207	13	18	0	0	1.38	Spend More Time	
 Lila Dawson	lila.dawson@alpha.school	13/10/25	Math	Zearn	1	36	32.6821	0	0	0.91	On Track	
 Lila Dawson	lila.dawson@alpha.school	13/10/25	Reading	Amplify	0.706666667	35	33.0331	0	0	0.94	On Track	
@@ -245,7 +246,7 @@ Lila Dawson	lila.dawson@alpha.school	14/10/25	Language	Lalilo	0.873417722	26	17	
 Lila Dawson	lila.dawson@alpha.school	14/10/25	Math	Freckle	0.7	0	2.1833	0	0		Spend More Time	
 Lila Dawson	lila.dawson@alpha.school	14/10/25	Reading	Amplify	0.872727273	42	19.0496	0	0	0.45	On Track	
 Lila Dawson	lila.dawson@alpha.school	15/10/25	Language	Lalilo	0.838709677	39	38	0	0	0.97	On Track	
-Lila Dawson	lila.dawson@alpha.school	15/10/25	Math	Freckle, Zearn	1.75	39	56.5824	0	0	1.45	Probable Idling/Inflated Time	
+Lila Dawson	lila.dawson@alpha.school	15/10/25	Math	Freckle- Zearn	1.75	39	56.5824	0	0	1.45	Probable Idling/Inflated Time	
 Lila Dawson	lila.dawson@alpha.school	15/10/25	Reading	Amplify	0.770833333	35	19.0663	0	0	0.54	On Track	
 Lila Dawson	lila.dawson@alpha.school	16/10/25	Language	Lalilo	0.890909091	52	51	0	0	0.98	On Track	
 Lila Dawson	lila.dawson@alpha.school	16/10/25	Math	Zearn	1	36	21.9828	0	0	0.61	On Track	
@@ -342,7 +343,7 @@ Ruby Singer	ruby.singer@alpha.school	14/10/25	Reading	Amplify	0.896551724	49	23.
 Ruby Singer	ruby.singer@alpha.school	15/10/25	Language	Lalilo	0.962962963	39	19	0	0	0.49	On Track	
 Ruby Singer	ruby.singer@alpha.school	15/10/25	Math	Zearn	1	36	28.0158	0	0	0.78	On Track	
 Ruby Singer	ruby.singer@alpha.school	15/10/25	Reading	Amplify	0.91025641	49	17.3998	0	0	0.36	On Track	
-Ruby Singer	ruby.singer@alpha.school	16/10/25	FastMath	AlphaMath Fluency, Fast Math	0.65	0.25	2.5333	0	0.6333	10.13	Spend More Time	
+Ruby Singer	ruby.singer@alpha.school	16/10/25	FastMath	AlphaMath Fluency- Fast Math	0.65	0.25	2.5333	0	0.6333	10.13	Spend More Time	
 Ruby Singer	ruby.singer@alpha.school	16/10/25	Language	Lalilo	1	0	12	0	0		Low Efficiency and Spend More Time	
 Ruby Singer	ruby.singer@alpha.school	16/10/25	Math	Zearn	1	36	26.5326	0	0	0.74	On Track	
 Ruby Singer	ruby.singer@alpha.school	16/10/25	Reading	Amplify	0.91509434	63	30.3495	0	0	0.48	On Track	
@@ -394,7 +395,7 @@ Teddy Dipaola	teddy.dipaola@alpha.school	14/10/25	Language	Lalilo	0.75	0	0	0	0		
 Teddy Dipaola	teddy.dipaola@alpha.school	14/10/25	Math	Zearn	1	13	0	0	0	0	Spend More Time	
 Teddy Dipaola	teddy.dipaola@alpha.school	14/10/25	Reading	Amplify	1	14	8.0166	0	0	0.57	Spend More Time	
 Teddy Dipaola	teddy.dipaola@alpha.school	15/10/25	Language	Lalilo	0.955555556	26	22	0	0	0.85	On Track	
-Teddy Dipaola	teddy.dipaola@alpha.school	15/10/25	Math	Freckle, Zearn	0.633333333	10	202.8498	0	0	20.28	Low Efficiency	
+Teddy Dipaola	teddy.dipaola@alpha.school	15/10/25	Math	Freckle- Zearn	0.633333333	10	202.8498	0	0	20.28	Low Efficiency	
 Teddy Dipaola	teddy.dipaola@alpha.school	15/10/25	Reading	Amplify	1	35	14.8665	0	0	0.42	On Track	
 Teddy Dipaola	teddy.dipaola@alpha.school	16/10/25	Language	Lalilo	0.963414634	39	7	0	0	0.18	On Track	
 Teddy Dipaola	teddy.dipaola@alpha.school	16/10/25	Math	Zearn	1	26	41.6989	0	0	1.6	Probable Idling/Inflated Time	
