@@ -1,5 +1,4 @@
 name,email,date,subject,Apps,Accuracy (%),XP Earned,Active Minutes,Inactive Minutes,Waste Minutes,Min/XP,MIP,Notes
-,,,,,0.00%,0,0,0,0,,Spend More Time,#N/A
 Aiden Richardson,aiden.richardson@alpha.school,13/10/25 0:00,Language,Lalilo,0.8203125,26,31,0,0,1.19,On Track,Test note
 Aiden Richardson,aiden.richardson@alpha.school,13/10/25 0:00,Math,Zearn,1,14,29.95,0,0,2.14,Low Efficiency,
 Aiden Richardson,aiden.richardson@alpha.school,13/10/25 0:00,Reading,Amplify,0.918032787,49,25.25,0,0,0.52,On Track,
@@ -559,3 +558,4 @@ Zoya Luna,zoya.luna@alpha.school,16/10/25,Math,HappyNumbers,0.00%,46,27,0,0,0.59
 Zoya Luna,zoya.luna@alpha.school,16/10/25,Reading,Mentava,0.00%,0,0,0,0,,Spend More Time,
 Zoya Luna,zoya.luna@alpha.school,17/10/25,Math,HappyNumbers,0.00%,20,16,0,0,0.8,Spend More Time,
 Zoya Luna,zoya.luna@alpha.school,17/10/25,Reading,Mentava,0.00%,0,0,0,0,,Spend More Time,
+
