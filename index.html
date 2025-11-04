@@ -9,7 +9,9 @@
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/customParseFormat.js"></script>
   <style>
-    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;margin:24px;}
+    :root{ --nameW: 200px; --subjW: 160px; }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;margin:24px;color:#0f172a}
     table{border-collapse:collapse;width:100%;table-layout:fixed}
     th,td{border:1px solid #e5e7eb}
     thead th{position:sticky;top:0;background:#f8fafc;z-index:3}
@@ -20,21 +22,23 @@
     .chip{padding:4px 8px;border-radius:8px;margin-left:8px;display:inline-block}
     .panel{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:8px 0 16px 0;background:#fafafa}
     .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-    select,input[type="text"]{padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px}
+    select,input[type="text"],input[type="number"]{padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px}
     button{padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;cursor:pointer}
 
-    /* --- NEW: student separators --- */
-    /* Thick separator line before each new student's first row */
+    /* Sticky first two columns use CSS vars so header/body stay aligned */
+    thead th.name, tbody th.name{min-width:var(--nameW); width:var(--nameW); left:0; position:sticky; z-index:3}
+    thead th.subj, tbody th.subj{min-width:var(--subjW); width:var(--subjW); left:var(--nameW); position:sticky; z-index:3}
+
+    /* Student separators */
     tbody tr.student-sep th,
-    tbody tr.student-sep td {
-      border-top: 3px solid #94a3b8; /* slate-400 */
-    }
-    /* Optional spacer row (blank line) between students */
-    tbody tr.student-gap td {
-      padding: 4px 0 !important;
-      border: none !important;
-      background: transparent !important;
-    }
+    tbody tr.student-sep td { border-top: 3px solid #94a3b8; }
+    tbody tr.student-gap td { padding: 4px 0 !important; border: none !important; background: transparent !important; }
+
+    /* Cells */
+    td{ text-align:center; min-width:90px; padding:6px 8px; border:1px solid #eee; }
+    td .pill{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; line-height:18px; background:rgba(255,255,255,.6)}
+
+    .muted{color:#64748b}
   </style>
 </head>
 <body>
@@ -93,6 +97,11 @@
           <option value="YYYY/MM/DD">YYYY/MM/DD</option>
         </select>
       </div>
+      <div>
+        <label>Sticky widths:</label>
+        <input id="nameW" type="number" value="200" min="120" style="width:80px"> px
+        <input id="subjW" type="number" value="160" min="120" style="width:80px; margin-left:8px;"> px
+      </div>
       <button id="build">Build Calendar</button>
     </div>
   </div>
@@ -109,15 +118,15 @@
     </table>
   </div>
 
-  <p id="status" style="margin-top:12px;color:#64748b;"></p>
+  <p id="status" class="muted" style="margin-top:12px;"></p>
 
 <script>
+// ===== libs =====
 dayjs.extend(dayjs_plugin_customParseFormat);
 
 // ===== Config =====
-const HOVER_INDICES = [4,5,6,7,8,9,12]; // E..J & M
 const COLOR = { onTrack:'#A5D6A7', spendMore:'#FFF59D', red:'#EF9A9A', absent:'#CFD8DC', none:'#EEEEEE' };
-const USE_STUDENT_GAP = false; // set to true if you also want a blank gap row between students
+const USE_STUDENT_GAP = false;
 
 // ===== State & Elements =====
 let mipRows = [], absRows = [];
@@ -135,6 +144,8 @@ const els = {
   subjects:document.getElementById('subjects'),
   mipFileName: document.getElementById('mipFileName'),
   absFileName: document.getElementById('absFileName'),
+  nameW: document.getElementById('nameW'),
+  subjW: document.getElementById('subjW'),
 };
 
 // ===== Helpers =====
@@ -158,7 +169,6 @@ const findCol = (rows, candidates) => {
 const toISODate = (v, fmt) => {
   if (!v) return null;
   if (fmt && fmt !== 'auto') { const d = dayjs(v, fmt, true); return d.isValid() ? d.format('YYYY-MM-DD') : null; }
-  // auto: common 4-digit + 2-digit year patterns
   let d = dayjs(v);
   if (!d.isValid()) d = dayjs(v, 'YYYY-MM-DD', true);
   if (!d.isValid()) d = dayjs(v, 'DD/MM/YYYY', true);
@@ -180,7 +190,19 @@ const statusColor = (val) => {
   return COLOR.none;
 };
 
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]));
+
+// Build tooltip content WITHOUT relying on brittle column indices.
+// Show all columns except the four selected mapping columns.
+const buildTooltip = (raw, omitKeys) => {
+  const lines = [];
+  for (const k of Object.keys(raw)) {
+    if (omitKeys.has(k)) continue;
+    const v = raw[k];
+    if (v !== undefined && v !== null && String(v).trim() !== '') lines.push(`${k}: ${v}`);
+  }
+  return lines.join('\n');
+};
 
 // ===== Load CSVs & guess columns =====
 async function loadCSVs() {
@@ -214,6 +236,10 @@ async function loadCSVs() {
 
 // ===== Build calendar =====
 function buildCalendar() {
+  // Update sticky widths (keeps header/body aligned and fixes overlap in screenshots)
+  document.documentElement.style.setProperty('--nameW', els.nameW.value + 'px');
+  document.documentElement.style.setProperty('--subjW', els.subjW.value + 'px');
+
   const nameCol = els.nameCol.value;
   const subjCol = els.subjCol.value || null;
   const mipCol  = els.mipCol.value;
@@ -233,13 +259,6 @@ function buildCalendar() {
     .filter(Boolean);
 
   if (!rows.length) { els.status.textContent = 'No valid dates after parsing. Check Date column/format.'; return; }
-
-  // tooltips from E..J and M
-  const mkTip = (r) => {
-    const parts = [];
-    for (const idx of HOVER_INDICES) { const k = allCols[idx]; if (k) parts.push(`${k}: ${r._raw[k] ?? ''}`); }
-    return parts.join('\n');
-  };
 
   // keep last per (__row,__date)
   const map = new Map(); rows.forEach(r => map.set(r.__row + '|' + r.__date, r));
@@ -268,67 +287,60 @@ function buildCalendar() {
 
   // maps
   const valMap = new Map(), tipMap = new Map();
-  dedup.forEach(r => { const k=r.__row+'|'+r.__date; valMap.set(k, r.__mip); tipMap.set(k, mkTip(r)); });
+  const omit = new Set([els.nameCol.value, els.subjCol.value, els.mipCol.value, els.dateCol.value].filter(Boolean));
+  dedup.forEach(r => { const k=r.__row+'|'+r.__date; valMap.set(k, r.__mip); tipMap.set(k, buildTooltip(r._raw, omit)); });
 
   // render header
   els.thead.innerHTML = '';
   const trh = document.createElement('tr');
-  const thN = document.createElement('th'); thN.style.position='sticky'; thN.style.left='0'; thN.style.background='#fafafa'; thN.style.zIndex='3'; thN.textContent='Name';
-  const thS = document.createElement('th'); thS.style.position='sticky'; thS.style.left='120px'; thS.style.background='#fafafa'; thS.style.zIndex='3'; thS.textContent='Subject';
+  const thN = document.createElement('th'); thN.className='name'; thN.textContent='Name';
+  const thS = document.createElement('th'); thS.className='subj'; thS.textContent='Subject';
   trh.append(thN, thS);
   dates.forEach(d => { const th=document.createElement('th'); th.textContent=d; trh.appendChild(th); });
   els.thead.appendChild(trh);
 
-  // rows + NEW: student separators
+  // rows + separators
   els.tbody.innerHTML = '';
   const subjects = new Set();
   let prevName = null;
 
-  rowKeys.forEach((rowKey, idx) => {
+  const frag = document.createDocumentFragment();
+  rowKeys.forEach((rowKey) => {
     let name = rowKey, subject = '';
     try { const a=JSON.parse(rowKey); name=a[0]; subject=a[1]||''; } catch {}
     if (subject) subjects.add(subject);
 
-    // optional spacer row between different students
     if (USE_STUDENT_GAP && prevName !== null && name !== prevName) {
       const gap = document.createElement('tr');
       gap.className = 'student-gap';
       const td = document.createElement('td');
       td.colSpan = 2 + dates.length; // Name + Subject + dates
       gap.appendChild(td);
-      els.tbody.appendChild(gap);
+      frag.appendChild(gap);
     }
 
     const tr = document.createElement('tr');
     tr.setAttribute('data-subject', subject || '');
-
-    // bold divider before a NEW student (except the very first)
     if (prevName !== null && name !== prevName) tr.classList.add('student-sep');
     prevName = name;
 
-    const th1 = document.createElement('th');
-    th1.style.position='sticky'; th1.style.left='0'; th1.style.background='#fff'; th1.style.zIndex='2';
-    th1.style.textAlign='left'; th1.style.whiteSpace='nowrap'; th1.textContent = name || '';
-
-    const th2 = document.createElement('th');
-    th2.style.position='sticky'; th2.style.left='120px'; th2.style.background='#fff'; th2.style.zIndex='2';
-    th2.style.textAlign='left'; th2.style.whiteSpace='nowrap'; th2.textContent = subject || '';
-
+    const th1 = document.createElement('th'); th1.className='name'; th1.style.textAlign='left'; th1.style.whiteSpace='nowrap'; th1.textContent = name || '';
+    const th2 = document.createElement('th'); th2.className='subj'; th2.style.textAlign='left'; th2.style.whiteSpace='nowrap'; th2.textContent = subject || '';
     tr.append(th1, th2);
 
     dates.forEach(d => {
       const td = document.createElement('td');
-      td.style.textAlign='center'; td.style.minWidth='90px'; td.style.padding='6px 8px'; td.style.border='1px solid #eee';
       const k = rowKey + '|' + d;
       const tip = tipMap.get(k); if (tip) td.title = tip;
       const isAbsent = absPairs.has(JSON.stringify([rowKey, d])) || absNameDate.has(JSON.stringify([name || '', d]));
-      if (isAbsent) { td.style.background = COLOR.absent; td.textContent = 'Absent'; }
+      if (isAbsent) { td.style.background = COLOR.absent; td.innerHTML = '<span class="pill">Absent</span>'; }
       else { const v = valMap.get(k); td.style.background = statusColor(v); td.textContent = (v==null ? '' : String(v)); }
       tr.appendChild(td);
     });
 
-    els.tbody.appendChild(tr);
+    frag.appendChild(tr);
   });
+  els.tbody.appendChild(frag);
 
   // subject checkboxes
   els.subjects.innerHTML = '';
@@ -337,8 +349,8 @@ function buildCalendar() {
     const wrap = document.createElement('div'); wrap.style.marginTop='6px';
     let htmlChecks = '<strong>Subjects:</strong> ';
     subjList.forEach(s => { htmlChecks += `<label style="margin-right:12px;"><input type="checkbox" class="subj" value="${esc(s)}" checked/> ${esc(s)}</label>`; });
-    htmlChecks += `<button onclick="selectAllSubjects(true)" style="margin-left:8px;">Select All</button>`;
-    htmlChecks += `<button onclick="selectAllSubjects(false)" style="margin-left:6px;">Clear</button>`;
+    htmlChecks += `<button type="button" onclick="selectAllSubjects(true)" style="margin-left:8px;">Select All</button>`;
+    htmlChecks += `<button type="button" onclick="selectAllSubjects(false)" style="margin-left:6px;">Clear</button>`;
     wrap.innerHTML = htmlChecks; els.subjects.appendChild(wrap);
   }
 
@@ -366,11 +378,18 @@ function buildCalendar() {
 }
 
 // wire up
+function applyWidths(){
+  document.documentElement.style.setProperty('--nameW', els.nameW.value + 'px');
+  document.documentElement.style.setProperty('--subjW', els.subjW.value + 'px');
+}
+['input','change'].forEach(ev=>{ els.nameW.addEventListener(ev, applyWidths); els.subjW.addEventListener(ev, applyWidths); });
+
 document.getElementById('reload').onclick = loadCSVs;
 document.getElementById('build').onclick   = buildCalendar;
 
 // auto-load on first visit
 loadCSVs();
+applyWidths();
 </script>
 </body>
 </html>
