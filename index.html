@@ -23,8 +23,6 @@
     thead th.subj, tbody th.subj { position: sticky; left: var(--nameW); min-width: var(--subjW); width: var(--subjW); background: #f8fafc; z-index: 5; border-right: 2px solid #e2e8f0; }
 
     td { text-align: center; min-width: 90px; padding: 6px 8px; }
-    /* Readable status pills */
-    .pill { display:inline-flex; align-items:center; justify-content:center; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; line-height:1.1; background: rgba(255,255,255,0.7); max-width: 84px; text-align:center; white-space: normal; word-break: break-word; }
     .chip { padding: 4px 8px; border-radius: 8px; margin-left: 8px; display: inline-block; }
     .panel { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin: 8px 0 16px 0; background: #fafafa; }
     .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -106,30 +104,11 @@
     };
 
     const color = (v)=>{
-      if(!v) return COLOR.none; const s=String(v).toLowerCase();
+      if(!v) return COLOR.none; const s=v.toLowerCase();
       if(s.includes('on track')) return COLOR.onTrack;
-      if(s.includes('spend')||s.includes('more time')) return COLOR.spendMore;
+      if(s.includes('spend')) return COLOR.spendMore;
       if(s.includes('efficiency')||s.includes('idle')||s.includes('inflated')) return COLOR.red;
       return COLOR.none;
-    };
-
-    const abbr = (v)=>{
-      if(!v) return '';
-      const s=String(v).toLowerCase();
-      if(s.includes('on track')) return 'On
-Track';
-      if(s.includes('spend')||s.includes('more time')) return 'Spend
-More
-Time';
-      if(s.includes('probable')||s.includes('inflated')) return 'Probable
-Idling/
-Inflated
-Time';
-      if(s.includes('efficiency')) return 'Low
-Efficiency';
-      if(s.includes('no work')) return 'No
-Work';
-      return v;
     };
 
     async function loadCSVs(){
@@ -154,14 +133,7 @@ Work';
       const frag=document.createDocumentFragment(); let prev=null;
       for(const key of keys){let [n,s]=JSON.parse(key);const tr=document.createElement('tr');if(prev&&prev!==n)tr.style.borderTop='3px solid #94a3b8';prev=n;
         const th1=document.createElement('th');th1.className='name';th1.textContent=n;const th2=document.createElement('th');th2.className='subj';th2.textContent=s;tr.append(th1,th2);
-        for(const d of dates){
-          const td=document.createElement('td');
-          const val=map.get(JSON.stringify([n,s,d]));
-          td.style.background=color(val);
-          if(val){ td.innerHTML = `<span class="pill" title="${String(val).replace(/"/g,'&quot;')}">${abbr(val)}</span>`; }
-          else { td.textContent=''; }
-          tr.append(td);
-        }frag.append(tr);}
+        for(const d of dates){const td=document.createElement('td');const val=map.get(JSON.stringify([n,s,d]));td.style.background=color(val);td.textContent=val||'';tr.append(td);}frag.append(tr);}
       els.tbody.append(frag);
       els.status.textContent=`Built ${dates.length} columns × ${keys.length} rows`;
     }
