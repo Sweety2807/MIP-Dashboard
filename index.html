@@ -12,7 +12,7 @@
     * { box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; margin: 24px; color: #0f172a; }
 
-    .scroll-wrapper { overflow-x: auto; overflow-y: hidden; width: 100%; }
+    .scroll-wrapper { overflow-x: auto; overflow-y: hidden; width: 100%; border: 1px solid #e5e7eb; border-radius: 10px; }
     .table-container { position: relative; min-width: max-content; }
     table { border-collapse: collapse; width: auto; table-layout: auto; }
 
@@ -22,23 +22,45 @@
     thead th.name, tbody th.name { position: sticky; left: 0; min-width: var(--nameW); width: var(--nameW); background: #f8fafc; z-index: 5; }
     thead th.subj, tbody th.subj { position: sticky; left: var(--nameW); min-width: var(--subjW); width: var(--subjW); background: #f8fafc; z-index: 5; border-right: 2px solid #e2e8f0; }
 
-    td { text-align: center; min-width: 90px; padding: 6px 8px; }
+    td { text-align: center; min-width: 96px; padding: 8px 10px; }
     .chip { padding: 4px 8px; border-radius: 8px; margin-left: 8px; display: inline-block; }
     .panel { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin: 8px 0 16px 0; background: #fafafa; }
     .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     select, input[type="text"], input[type="number"] { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
     button { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; cursor: pointer; }
     .muted { color: #64748b; }
+
+    /* Compact wrapped cell pills */
+    .pill {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 2px 8px; border-radius: 999px;
+      font-size: 12px; font-weight: 600; line-height: 1.2;
+      background: rgba(255,255,255,0.7);
+      max-width: 90px; text-align: center;
+      white-space: normal; word-break: break-word;
+    }
+
+    tbody tr.student-sep th,
+    tbody tr.student-sep td { border-top: 3px solid #94a3b8; }
   </style>
 </head>
 <body>
   <h1>📅 MIP Calendar</h1>
-  <p><strong>Rows:</strong> Name &amp; Subject &nbsp;&nbsp;<strong>Columns:</strong> Date &nbsp;&nbsp;<strong>Cells:</strong> MIP</p>
+  <p><strong>Rows:</strong> Name &amp; Subject &nbsp;&nbsp;<strong>Columns:</strong> Date &nbsp;&nbsp;<strong>Cells:</strong> MIP (or <em>Absent</em>)</p>
+
+  <div style="margin:8px 0 16px 0;">
+    <strong>Legend:</strong>
+    <span class="chip" style="background:#A5D6A7;">On Track</span>
+    <span class="chip" style="background:#FFF59D;">Spend More Time</span>
+    <span class="chip" style="background:#EF9A9A;">Low Efficiency / Idling</span>
+    <span class="chip" style="background:#CFD8DC;">Absent</span>
+    <span class="chip" style="background:#EEEEEE;">No Data</span>
+  </div>
 
   <div class="panel">
     <div class="row">
-      <label>MIP CSV:</label><input id="mipFileName" value="mip.csv" style="width:180px"/>
-      <label>Absent CSV:</label><input id="absFileName" value="absent.csv" style="width:180px"/>
+      <label>MIP CSV:</label><input id="mipFileName" value="mip.csv" style="width:200px"/>
+      <label>Absent CSV (optional):</label><input id="absFileName" value="absent.csv" style="width:200px"/>
       <button id="reload">Load CSVs</button>
     </div>
     <div class="row" style="margin-top:10px">
@@ -61,6 +83,13 @@
     </div>
   </div>
 
+  <div class="panel">
+    <div class="row">
+      <label>Search:</label> <input id="q" placeholder="Type name or subject..." style="width:260px" />
+      <div id="subjects"></div>
+    </div>
+  </div>
+
   <div class="scroll-wrapper">
     <div class="table-container">
       <table>
@@ -70,22 +99,26 @@
     </div>
   </div>
 
-  <p id="status" class="muted"></p>
+  <p id="status" class="muted" style="margin-top:10px;"></p>
 
   <script>
     dayjs.extend(dayjs_plugin_customParseFormat);
+
     const COLOR = { onTrack:'#A5D6A7', spendMore:'#FFF59D', red:'#EF9A9A', absent:'#CFD8DC', none:'#EEEEEE' };
-    let mipRows = [], absRows = [];
+    let mipRows = [], absRows = [], allCols = [];
     const els = {
-      nameCol: document.getElementById('nameCol'), subjCol: document.getElementById('subjCol'), mipCol: document.getElementById('mipCol'), dateCol: document.getElementById('dateCol'),
-      dateFmt: document.getElementById('dateFmt'), thead: document.getElementById('thead'), tbody: document.getElementById('tbody'),
-      status: document.getElementById('status'), mipFileName: document.getElementById('mipFileName'), absFileName: document.getElementById('absFileName'),
-      nameW: document.getElementById('nameW'), subjW: document.getElementById('subjW')
+      nameCol: document.getElementById('nameCol'), subjCol: document.getElementById('subjCol'),
+      mipCol: document.getElementById('mipCol'), dateCol: document.getElementById('dateCol'),
+      dateFmt: document.getElementById('dateFmt'), thead: document.getElementById('thead'),
+      tbody: document.getElementById('tbody'), status: document.getElementById('status'),
+      mipFileName: document.getElementById('mipFileName'), absFileName: document.getElementById('absFileName'),
+      nameW: document.getElementById('nameW'), subjW: document.getElementById('subjW'),
+      q: document.getElementById('q'), subjects: document.getElementById('subjects')
     };
 
     const parseCSV = async (url) => {
       const res = await fetch(url, {cache:'no-store'});
-      if (!res.ok) throw new Error(`Failed ${url}`);
+      if (!res.ok) throw new Error('Failed to fetch ' + url);
       const text = await res.text();
       return new Promise((resolve) => {
         Papa.parse(text, {header:true, skipEmptyLines:true, complete: r=>resolve(r.data)});
@@ -95,45 +128,115 @@
     const findCol = (rows, candidates) => {
       if (!rows.length) return null;
       const cols = Object.keys(rows[0]);
-      for (const c of candidates) { const hit = cols.find(k=>k.toLowerCase().includes(c.toLowerCase())); if (hit) return hit; }
+      for (const cand of candidates) {
+        const hit = cols.find(c => c.toLowerCase().includes(cand.toLowerCase()));
+        if (hit) return hit;
+      }
       return cols[0];
     };
 
     const toISO = (v, fmt) => {
-      if (!v) return null; let d = fmt==='auto'?dayjs(v):dayjs(v,fmt,true); return d.isValid()?d.format('YYYY-MM-DD'):null;
+      if (!v) return null;
+      if (fmt !== 'auto') {
+        const d = dayjs(v, fmt, true);
+        return d.isValid() ? d.format('YYYY-MM-DD') : null;
+      }
+      let d = dayjs(v);
+      if (!d.isValid()) d = dayjs(v, 'YYYY-MM-DD', true);
+      if (!d.isValid()) d = dayjs(v, 'DD/MM/YYYY', true);
+      if (!d.isValid()) d = dayjs(v, 'MM/DD/YYYY', true);
+      if (!d.isValid()) d = dayjs(v, 'DD/MM/YY', true);
+      return d.isValid() ? d.format('YYYY-MM-DD') : null;
     };
 
-    const color = (v)=>{
-      if(!v) return COLOR.none; const s=v.toLowerCase();
+    const cellColor = (v) => {
+      if(!v) return COLOR.none; const s=String(v).toLowerCase();
       if(s.includes('on track')) return COLOR.onTrack;
-      if(s.includes('spend')) return COLOR.spendMore;
+      if(s.includes('spend')||s.includes('more time')) return COLOR.spendMore;
       if(s.includes('efficiency')||s.includes('idle')||s.includes('inflated')) return COLOR.red;
+      if(s.includes('absent')) return COLOR.absent;
       return COLOR.none;
     };
 
+    const abbr = (v) => {
+      if(!v) return '';
+      const s=String(v).toLowerCase();
+      if(s.includes('on track')) return 'On\\nTrack';
+      if(s.includes('spend')||s.includes('more time')) return 'Spend\\nMore\\nTime';
+      if(s.includes('probable')||s.includes('inflated')) return 'Probable\\nIdling/\\nInflated\\nTime';
+      if(s.includes('efficiency')) return 'Low\\nEfficiency';
+      if(s.includes('no work')) return 'No\\nWork';
+      if(s.includes('absent')) return 'Absent';
+      return v;
+    };
+
+    const esc = (s) => String(s ?? "").replace(/[&<>\"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;','\\'':'&#39;'}[m]));
+
     async function loadCSVs(){
-      try{ mipRows=await parseCSV(els.mipFileName.value);}catch{mipRows=[];}
-      try{ absRows=await parseCSV(els.absFileName.value);}catch{absRows=[];}
-      if(!mipRows.length){els.status.textContent='No MIP data';return;}
-      const cols=Object.keys(mipRows[0]);
-      const name=findCol(mipRows,['name']), subj=findCol(mipRows,['subject']), mip=findCol(mipRows,['mip','status']), date=findCol(mipRows,['date']);
-      for(const sel of [els.nameCol,els.subjCol,els.mipCol,els.dateCol]){ sel.innerHTML=''; cols.forEach(c=>sel.innerHTML+=`<option value="${c}">${c}</option>`);} 
-      els.nameCol.value=name; els.subjCol.value=subj; els.mipCol.value=mip; els.dateCol.value=date;
+      els.status.textContent = 'Loading...';
+      try{ mipRows = await parseCSV(els.mipFileName.value.trim()); }catch{ mipRows = []; }
+      try{ absRows = await parseCSV(els.absFileName.value.trim()); }catch{ absRows = []; }
+      if(!mipRows.length){ els.status.textContent='No MIP data'; return; }
+
+      allCols = Object.keys(mipRows[0]);
+      const guesses = {
+        name: findCol(mipRows, ['name','student name','learner']),
+        subj: findCol(mipRows, ['subject','course','class']),
+        mip:  findCol(mipRows, ['mip','status','progress','metric']),
+        date: findCol(mipRows, ['date','activity date','session date','day'])
+      };
+
+      [els.nameCol, els.subjCol, els.mipCol, els.dateCol].forEach(sel=>{
+        sel.innerHTML=''; allCols.forEach(c=> sel.innerHTML+=`<option value=\"${esc(c)}\">${esc(c)}</option>`);
+      });
+      els.nameCol.value = guesses.name || allCols[0];
+      els.subjCol.value = guesses.subj || allCols[0];
+      els.mipCol.value  = guesses.mip  || allCols[0];
+      els.dateCol.value = guesses.date || allCols[0];
+
+      els.status.textContent = 'Loaded CSVs';
     }
 
     function buildCalendar(){
-      document.documentElement.style.setProperty('--nameW', els.nameW.value+'px');
-      document.documentElement.style.setProperty('--subjW', els.subjW.value+'px');
-      const fmt=els.dateFmt.value; const nameC=els.nameCol.value, subjC=els.subjCol.value, mipC=els.mipCol.value, dateC=els.dateCol.value;
-      const rows=mipRows.map(r=>{const d=toISO(r[dateC],fmt);if(!d)return null;return{n:r[nameC],s:r[subjC],m:r[mipC],d};}).filter(Boolean);
-      const dates=[...new Set(rows.map(r=>r.d))].sort(); const keys=[...new Set(rows.map(r=>JSON.stringify([r.n,r.s])))]
-      const map=new Map(); rows.forEach(r=>map.set(JSON.stringify([r.n,r.s,r.d]),r.m));
-      els.thead.innerHTML='<tr><th class="name">Name</th><th class="subj">Subject</th>'+dates.map(d=>`<th>${d}</th>`).join('')+'</tr>';
+      document.documentElement.style.setProperty('--nameW', els.nameW.value + 'px');
+      document.documentElement.style.setProperty('--subjW', els.subjW.value + 'px');
+
+      const nameC = els.nameCol.value, subjC = els.subjCol.value, mipC = els.mipCol.value, dateC = els.dateCol.value, fmt = els.dateFmt.value;
+      const rows = mipRows.map(r=>{
+        const iso=toISO(r[dateC],fmt); if(!iso) return null;
+        return {n:String(r[nameC]||''), s:String(r[subjC]||''), d:iso, m:r[mipC]};
+      }).filter(Boolean);
+      const last=new Map(); rows.forEach(r=>last.set(JSON.stringify([r.n,r.s,r.d]),r));
+      const data=[...last.values()];
+      const dates=[...new Set(data.map(r=>r.d))].sort();
+      const keys=[...new Set(data.map(r=>JSON.stringify([r.n,r.s])))];
+
+
+      els.thead.innerHTML='<tr><th class=\"name\">Name</th><th class=\"subj\">Subject</th>'+dates.map(d=>`<th>${d}</th>`).join('')+'</tr>';
       els.tbody.innerHTML='';
-      const frag=document.createDocumentFragment(); let prev=null;
-      for(const key of keys){let [n,s]=JSON.parse(key);const tr=document.createElement('tr');if(prev&&prev!==n)tr.style.borderTop='3px solid #94a3b8';prev=n;
-        const th1=document.createElement('th');th1.className='name';th1.textContent=n;const th2=document.createElement('th');th2.className='subj';th2.textContent=s;tr.append(th1,th2);
-        for(const d of dates){const td=document.createElement('td');const val=map.get(JSON.stringify([n,s,d]));td.style.background=color(val);td.textContent=val||'';tr.append(td);}frag.append(tr);}
+
+      const frag=document.createDocumentFragment();
+      let prev=null;
+      for(const key of keys){
+        let [n,s]=JSON.parse(key);
+        const tr=document.createElement('tr');
+        if(prev && prev!==n) tr.classList.add('student-sep');
+        prev=n;
+        const th1=document.createElement('th'); th1.className='name'; th1.textContent=n;
+        const th2=document.createElement('th'); th2.className='subj'; th2.textContent=s;
+        tr.append(th1,th2);
+
+        for(const d of dates){
+          const td=document.createElement('td');
+          const val=data.find(r=>r.n===n && r.s===s && r.d===d)?.m;
+          td.style.background=cellColor(val);
+          if(val){
+            td.innerHTML=`<span class=\"pill\" title=\"${esc(val)}\">${abbr(val)}</span>`;
+          }
+          tr.append(td);
+        }
+        frag.append(tr);
+      }
       els.tbody.append(frag);
       els.status.textContent=`Built ${dates.length} columns × ${keys.length} rows`;
     }
